@@ -1,0 +1,229 @@
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quanto_posso/models/app_backup.dart';
+import 'package:quanto_posso/repositories/backup_repository.dart';
+import 'package:quanto_posso/repositories/preferences_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class FakePickerService implements BackupPickerService {
+  FakePickerService(this.file);
+
+  final PickedBackupFile? file;
+
+  @override
+  Future<PickedBackupFile?> pickBackupFile() async => file;
+}
+
+class FakeDatabaseRestoreService implements BackupDatabaseRestoreService {
+  bool called = false;
+  Object? error;
+
+  @override
+  Future<void> restore(AppBackup backup) async {
+    called = true;
+    if (error case final error?) throw error;
+  }
+}
+
+class FakeImportPreferencesRepository extends PreferencesRepository {
+  bool imported = false;
+
+  @override
+  Future<void> importPreferences(Map<String, Object?> preferences) async {
+    imported = true;
+  }
+}
+
+AppBackup validBackup({
+  int version = 1,
+  String appName = 'Quanto Posso',
+  Map<String, Object?>? profile,
+  List<Map<String, Object?>>? categories,
+  List<Map<String, Object?>>? expenses,
+  Map<String, Object?> preferences = const {},
+}) {
+  final date = DateTime.utc(2026, 8, 5, 9, 15).toIso8601String();
+  return AppBackup(
+    backupVersion: version,
+    appName: appName,
+    exportedAt: DateTime.parse(date),
+    profile:
+        profile ??
+        {
+          'id': 1,
+          'name': 'Andr\u00e9',
+          'monthly_income': 3500.0,
+          'created_at': date,
+          'updated_at': date,
+        },
+    categories:
+        categories ??
+        [
+          {
+            'id': 'food',
+            'name': 'Alimenta\u00e7\u00e3o',
+            'icon_code_point': 1,
+            'icon_font_family': 'MaterialIcons',
+            'color_value': 1,
+            'is_default': 1,
+            'created_at': date,
+          },
+        ],
+    expenses:
+        expenses ??
+        [
+          {
+            'id': 1,
+            'amount': 25.0,
+            'category_id': 'food',
+            'description': 'Almo\u00e7o',
+            'occurred_at': date,
+            'created_at': date,
+            'updated_at': date,
+          },
+        ],
+    preferences: preferences,
+  );
+}
+
+BackupRepository repositoryFor(AppBackup backup) {
+  return BackupRepository(
+    pickerService: FakePickerService(
+      PickedBackupFile(name: 'backup.json', content: jsonEncode(backup)),
+    ),
+  );
+}
+
+void main() {
+  test('JSON v\u00e1lido gera preview', () async {
+    final preview = await repositoryFor(
+      validBackup(),
+    ).selectAndValidateBackup();
+    expect(preview?.profileName, 'Andr\u00e9');
+    expect(preview?.categoryCount, 1);
+    expect(preview?.expenseCount, 1);
+  });
+
+  test('cancelamento retorna null', () async {
+    final repository = BackupRepository(pickerService: FakePickerService(null));
+    expect(await repository.selectAndValidateBackup(), isNull);
+  });
+
+  test('arquivo maior que 10 MB \u00e9 rejeitado', () async {
+    final repository = BackupRepository(
+      pickerService: FakePickerService(
+        PickedBackupFile(
+          name: 'backup.json',
+          content: 'a' * (10 * 1024 * 1024 + 1),
+        ),
+      ),
+    );
+    expect(
+      repository.selectAndValidateBackup(),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          'O arquivo de backup \u00e9 muito grande.',
+        ),
+      ),
+    );
+  });
+
+  test('app_name inv\u00e1lido \u00e9 rejeitado', () {
+    expect(
+      repositoryFor(validBackup(appName: 'Outro')).selectAndValidateBackup(),
+      throwsFormatException,
+    );
+  });
+
+  test('vers\u00e3o inv\u00e1lida \u00e9 rejeitada', () {
+    expect(
+      repositoryFor(validBackup(version: 2)).selectAndValidateBackup(),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          'Vers\u00e3o de backup n\u00e3o suportada.',
+        ),
+      ),
+    );
+  });
+
+  test('perfil inv\u00e1lido \u00e9 rejeitado', () {
+    expect(
+      repositoryFor(validBackup(profile: const {})).selectAndValidateBackup(),
+      throwsFormatException,
+    );
+  });
+
+  test('categoria duplicada \u00e9 rejeitada', () {
+    final category = validBackup().categories.first;
+    expect(
+      repositoryFor(
+        validBackup(categories: [category, Map.of(category)]),
+      ).selectAndValidateBackup(),
+      throwsFormatException,
+    );
+  });
+
+  test('gasto com categoria inexistente \u00e9 rejeitado', () {
+    final expense = Map<String, Object?>.from(validBackup().expenses.first)
+      ..['category_id'] = 'missing';
+    expect(
+      repositoryFor(validBackup(expenses: [expense])).selectAndValidateBackup(),
+      throwsFormatException,
+    );
+  });
+
+  test('restaura\u00e7\u00e3o segue a ordem transacional obrigat\u00f3ria', () {
+    expect(LocalBackupDatabaseRestoreService.operationOrder, [
+      'delete expenses',
+      'delete categories',
+      'delete profiles',
+      'insert profile',
+      'insert categories',
+      'insert expenses',
+    ]);
+  });
+
+  test(
+    'falha na opera\u00e7\u00e3o at\u00f4mica n\u00e3o importa prefer\u00eancias',
+    () async {
+      // O rollback concreto pertence ao transaction do sqflite. Sem adicionar
+      // sqflite_common_ffi, este teste verifica a fronteira at\u00f4mica injetada.
+      final database = FakeDatabaseRestoreService()
+        ..error = StateError('insert failed');
+      final preferences = FakeImportPreferencesRepository();
+      final repository = BackupRepository(
+        databaseRestoreService: database,
+        preferencesRepository: preferences,
+      );
+      await expectLater(
+        repository.restoreBackup(validBackup()),
+        throwsStateError,
+      );
+      expect(database.called, isTrue);
+      expect(preferences.imported, isFalse);
+    },
+  );
+
+  test('prefer\u00eancias desconhecidas s\u00e3o ignoradas', () async {
+    SharedPreferences.setMockInitialValues({});
+    final repository = PreferencesRepository();
+    await repository.importPreferences(const {'plugin_secret': 'ignore'});
+    expect(await repository.exportPreferences(), isEmpty);
+  });
+
+  test(
+    'prefer\u00eancia conhecida com tipo inv\u00e1lido \u00e9 rejeitada',
+    () {
+      final repository = PreferencesRepository();
+      expect(
+        repository.importPreferences(const {'daily_reminder_hour': '20'}),
+        throwsFormatException,
+      );
+    },
+  );
+}
