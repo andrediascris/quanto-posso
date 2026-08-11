@@ -410,7 +410,7 @@ void main() {
       'Configura\u00e7\u00f5es',
       'Home',
     ]) {
-      await tester.tap(find.text(destination));
+      await tester.tap(find.byTooltip(destination));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(
@@ -419,15 +419,11 @@ void main() {
       );
     }
 
-    final navigationContext = tester.element(find.byType(NavigationBar));
-    final navigationTheme = NavigationBarTheme.of(navigationContext);
-    final selectedIconColor = navigationTheme.iconTheme?.resolve({
-      WidgetState.selected,
-    })?.color;
-    final unselectedIconColor = navigationTheme.iconTheme?.resolve({})?.color;
-    expect(selectedIconColor, isNotNull);
-    expect(unselectedIconColor, isNotNull);
-    expect(selectedIconColor, isNot(unselectedIconColor));
+    final selectedIcon = tester.widget<Icon>(find.byIcon(Icons.home_rounded));
+    final unselectedIcon = tester.widget<Icon>(
+      find.byIcon(Icons.pie_chart_outline_rounded),
+    );
+    expect(selectedIcon.color, isNot(unselectedIcon.color));
   });
 
   testWidgets('preferência antiga do sistema abre o aplicativo no tema claro', (
@@ -567,7 +563,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Configura\u00e7\u00f5es'));
+    await tester.tap(find.byTooltip('Configurações'));
     await tester.pumpAndSettle();
     final backupItem = find.text('Backup e dados');
     await tester.ensureVisible(backupItem);
@@ -864,7 +860,7 @@ void main() {
 
     expect(find.text('Olá, André!'), findsOneWidget);
 
-    await tester.tap(find.text('Histórico'));
+    await tester.tap(find.byTooltip('Histórico'));
     await tester.pumpAndSettle();
 
     expect(find.text('Histórico'), findsWidgets);
@@ -962,7 +958,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Histórico'));
+    await tester.tap(find.byTooltip('Histórico'));
     await tester.pumpAndSettle();
 
     const mobileSizes = [Size(360, 800), Size(412, 915), Size(411, 923)];
@@ -1066,7 +1062,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Histórico'));
+    await tester.tap(find.byTooltip('Histórico'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Todo o período'));
@@ -1176,7 +1172,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Dashboard'));
+    await tester.tap(find.byTooltip('Dashboard'));
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard'), findsWidgets);
@@ -1262,7 +1258,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Dashboard'));
+    await tester.tap(find.byTooltip('Dashboard'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Ver todas'));
@@ -1386,7 +1382,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Dashboard'));
+      await tester.tap(find.byTooltip('Dashboard'));
       await tester.pumpAndSettle();
       await tester.binding.setSurfaceSize(size);
       await tester.pumpAndSettle();
@@ -1439,7 +1435,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Configurações'));
+    await tester.tap(find.byTooltip('Configurações'));
     await tester.pumpAndSettle();
 
     expect(find.text('Configurações'), findsWidgets);
@@ -1537,7 +1533,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Configurações'));
+    await tester.tap(find.byTooltip('Configurações'));
     await tester.pumpAndSettle();
 
     const mobileSizes = [Size(360, 800), Size(412, 915), Size(411, 923)];
@@ -1590,7 +1586,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Configurações'));
+    await tester.tap(find.byTooltip('Configurações'));
     await tester.pumpAndSettle();
     final categoriesItem = find.text('Categorias').last;
     await tester.ensureVisible(categoriesItem);
@@ -1624,7 +1620,7 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Home'));
+    await tester.tap(find.byTooltip('Home'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Adicionar gasto'));
     await tester.pumpAndSettle();
@@ -1683,7 +1679,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Configurações'));
+    await tester.tap(find.byTooltip('Configurações'));
     await tester.pumpAndSettle();
 
     expect(find.text('Notificações'), findsOneWidget);
@@ -1763,7 +1759,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Histórico'));
+    await tester.tap(find.byTooltip('Histórico'));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Excluir gasto'), findsOneWidget);
@@ -1779,7 +1775,7 @@ void main() {
     expect(expenseRepository.expenses, isEmpty);
   });
 
-  testWidgets('cancelar exclusão por swipe mantém o gasto', (
+  testWidgets('arrastar gasto não inicia exclusão', (
     WidgetTester tester,
   ) async {
     final now = DateTime.now();
@@ -1832,15 +1828,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Histórico'));
+    await tester.tap(find.byTooltip('Histórico'));
     await tester.pumpAndSettle();
 
     await tester.drag(find.text('Gasto mantido'), const Offset(-500, 0));
     await tester.pumpAndSettle();
-    expect(find.text('Excluir gasto?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(TextButton, 'Cancelar'));
-    await tester.pumpAndSettle();
 
+    expect(find.byType(Dismissible), findsNothing);
+    expect(find.text('Excluir gasto?'), findsNothing);
     expect(find.text('Gasto mantido'), findsOneWidget);
     expect(expenseRepository.expenses, hasLength(1));
   });
@@ -1889,7 +1884,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Hist\u00f3rico'));
+    await tester.tap(find.byTooltip('Histórico'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Editar gasto'));

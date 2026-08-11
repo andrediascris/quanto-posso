@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:quanto_posso/app/theme/app_colors.dart';
 import 'package:quanto_posso/features/dashboard/pages/dashboard_page.dart';
 import 'package:quanto_posso/features/expenses/pages/add_expense_page.dart';
 import 'package:quanto_posso/features/history/pages/history_page.dart';
@@ -114,6 +113,7 @@ class _MainShellPageState extends State<MainShellPage> {
           ),
           bottomNavigationBar: AppBottomNavigation(
             currentIndex: _currentIndex,
+            onAddExpense: _openAddExpense,
             onDestinationSelected: (index) {
               setState(() => _currentIndex = index);
               if (index == 1) {
@@ -124,15 +124,6 @@ class _MainShellPageState extends State<MainShellPage> {
               }
             },
           ),
-          floatingActionButton: _currentIndex == 0 || _currentIndex == 2
-              ? FloatingActionButton(
-                  tooltip: 'Adicionar gasto',
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: AppColors.primary,
-                  onPressed: _openAddExpense,
-                  child: const Icon(Icons.add_rounded),
-                )
-              : null,
         );
       },
     );

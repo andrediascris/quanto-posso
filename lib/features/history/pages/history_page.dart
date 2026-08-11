@@ -630,33 +630,11 @@ class _HistoryPageState extends State<HistoryPage> {
               ),
               const SizedBox(height: AppSpacing.xs),
             ],
-            Semantics(
-              label: 'Deslize para excluir o gasto',
-              child: Dismissible(
-                key: ValueKey('expense_${expense.id}'),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                  ),
-                  alignment: Alignment.centerRight,
-                  decoration: BoxDecoration(
-                    color: AppColors.error,
-                    borderRadius: BorderRadius.circular(AppRadius.card),
-                  ),
-                  child: const Icon(
-                    Icons.delete_outline_rounded,
-                    color: AppColors.textLight,
-                  ),
-                ),
-                confirmDismiss: (direction) => _deleteExpense(context, expense),
-                child: _HistoryExpenseCard(
-                  expense: expense,
-                  category: _categoryFor(expense),
-                  onEdit: () => _editExpense(context, expense),
-                  onDelete: () => _deleteExpense(context, expense),
-                ),
-              ),
+            _HistoryExpenseCard(
+              expense: expense,
+              category: _categoryFor(expense),
+              onEdit: () => _editExpense(context, expense),
+              onDelete: () => _deleteExpense(context, expense),
             ),
             if (index < expenses.length - 1)
               const SizedBox(height: AppSpacing.sm),

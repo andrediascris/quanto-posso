@@ -11,17 +11,38 @@ import 'package:quanto_posso/features/splash/pages/splash_page.dart';
 import 'package:quanto_posso/providers/initial_setup_provider.dart';
 import 'package:quanto_posso/shared/buttons/primary_button.dart';
 
-class StartupPage extends StatelessWidget {
+class StartupPage extends StatefulWidget {
   const StartupPage({super.key});
+
+  @override
+  State<StartupPage> createState() => _StartupPageState();
+}
+
+class _StartupPageState extends State<StartupPage> {
+  bool _videoFinished = false;
 
   @override
   Widget build(BuildContext context) {
     return Consumer<InitialSetupProvider>(
       builder: (context, provider, child) {
+        final isInitializing =
+            provider.status == InitialSetupStatus.initial ||
+            provider.status == InitialSetupStatus.loading;
+
+        if (!_videoFinished || isInitializing) {
+          return SplashPage(
+            onFinished: () {
+              if (mounted && !_videoFinished) {
+                setState(() => _videoFinished = true);
+              }
+            },
+          );
+        }
+
         return switch (provider.status) {
           InitialSetupStatus.initial ||
-          InitialSetupStatus.loading ||
-          InitialSetupStatus.saving => const SplashPage(),
+          InitialSetupStatus.loading => const SizedBox.shrink(),
+          InitialSetupStatus.saving => SplashPage(onFinished: () {}),
           InitialSetupStatus.requiresSetup => OnboardingPage(
             onStart: () => _openProfileSetup(context, provider),
           ),

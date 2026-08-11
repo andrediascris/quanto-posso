@@ -7,7 +7,7 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   static const _databaseName = 'quanto_posso.db';
-  static const _databaseVersion = 5;
+  static const _databaseVersion = 6;
   static const _profilesTable = 'profiles';
   static const _categoriesTable = 'categories';
   static const _expensesTable = 'expenses';
@@ -101,6 +101,20 @@ class AppDatabase {
           ELSE 'cancelled'
         END
       ''');
+    }
+    if (oldVersion < 6) {
+      await database.update(
+        _categoriesTable,
+        {'color_value': 0xFF3498DB},
+        where: 'id = ? AND is_default = ?',
+        whereArgs: ['water', 1],
+      );
+      await database.update(
+        _categoriesTable,
+        {'color_value': 0xFFF4B400},
+        where: 'id = ? AND is_default = ?',
+        whereArgs: ['electricity', 1],
+      );
     }
   }
 
