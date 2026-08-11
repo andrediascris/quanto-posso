@@ -7,6 +7,7 @@ class AppBackup {
     required this.categories,
     required this.expenses,
     required this.preferences,
+    this.recurringPlans = const [],
   });
 
   final int backupVersion;
@@ -16,6 +17,7 @@ class AppBackup {
   final List<Map<String, Object?>> categories;
   final List<Map<String, Object?>> expenses;
   final Map<String, Object?> preferences;
+  final List<Map<String, Object?>> recurringPlans;
 
   Map<String, Object?> toJson() => {
     'metadata': <String, Object?>{
@@ -26,6 +28,7 @@ class AppBackup {
     'profile': profile,
     'categories': categories,
     'expenses': expenses,
+    'recurring_expense_plans': recurringPlans,
     'preferences': preferences,
   };
 
@@ -62,6 +65,12 @@ class AppBackup {
       categories: _mapList(json['categories'], 'categories'),
       expenses: _mapList(json['expenses'], 'expenses'),
       preferences: _stringMap(json['preferences'], 'preferences'),
+      recurringPlans: json['recurring_expense_plans'] == null
+          ? const []
+          : _mapList(
+              json['recurring_expense_plans'],
+              'recurring_expense_plans',
+            ),
     );
   }
 }

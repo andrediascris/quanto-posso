@@ -9,6 +9,7 @@ import 'package:quanto_posso/core/utils/currency_utils.dart';
 import 'package:quanto_posso/features/categories/pages/category_management_page.dart';
 import 'package:quanto_posso/features/settings/pages/edit_profile_page.dart';
 import 'package:quanto_posso/features/settings/pages/backup_page.dart';
+import 'package:quanto_posso/features/recurring/pages/recurring_expenses_page.dart';
 import 'package:quanto_posso/models/expense_category.dart';
 import 'package:quanto_posso/models/user_profile.dart';
 import 'package:quanto_posso/providers/budget_alert_provider.dart';
@@ -25,11 +26,13 @@ class SettingsPage extends StatelessWidget {
     required this.profile,
     required this.categories,
     this.onProfileUpdated,
+    this.onAddExpense,
   });
 
   final UserProfile profile;
   final List<ExpenseCategory> categories;
   final Future<void> Function()? onProfileUpdated;
+  final Future<void> Function()? onAddExpense;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +43,7 @@ class SettingsPage extends StatelessWidget {
     final budgetAlertProvider = context.watch<BudgetAlertProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
@@ -52,110 +55,129 @@ class SettingsPage extends StatelessWidget {
             children: [
               Text(
                 'Configurações',
-                style: AppTypography.h2.copyWith(color: AppColors.primary),
+                style: AppTypography.h2.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Personalize o aplicativo e gerencie seus dados.',
                 style: AppTypography.body.copyWith(
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.lg),
               const _SectionTitle('Perfil'),
               const SizedBox(height: AppSpacing.sm),
-              SettingsItemCard(
-                icon: Icons.person_outline_rounded,
-                title: currentProfile.name,
-                subtitle: CurrencyUtils.format(currentProfile.monthlyIncome),
+              _ProfileCard(
+                profile: currentProfile,
                 onTap: () =>
                     _openEditProfile(context, setupProvider, currentProfile),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.lg),
               const _SectionTitle('Aparência'),
               const SizedBox(height: AppSpacing.sm),
               Container(
                 padding: const EdgeInsets.all(AppSpacing.cardPadding),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceLight,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(AppRadius.card),
                   boxShadow: const [AppShadows.card],
                 ),
-                child: SegmentedButton<ThemeMode>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
-                      value: ThemeMode.system,
-                      icon: Icon(Icons.settings_suggest_outlined),
-                      label: Text('Sistema'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const _SettingsCardHeader(
+                      icon: Icons.palette_outlined,
+                      title: 'Tema do aplicativo',
+                      subtitle: 'Escolha como o Quanto Posso deve aparecer.',
                     ),
-                    ButtonSegment(
-                      value: ThemeMode.light,
-                      icon: Icon(Icons.light_mode_outlined),
-                      label: Text('Claro'),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.dark,
-                      icon: Icon(Icons.dark_mode_outlined),
-                      label: Text('Escuro'),
+                    const SizedBox(height: AppSpacing.md),
+                    SegmentedButton<ThemeMode>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: ThemeMode.light,
+                          label: Text('Claro'),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.dark,
+                          label: Text('Escuro'),
+                        ),
+                      ],
+                      selected: {themeProvider.themeMode},
+                      onSelectionChanged: (selection) async {
+                        try {
+                          await themeProvider.setThemeMode(selection.first);
+                        } on Object {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Não foi possível alterar o tema.',
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
                     ),
                   ],
-                  selected: {themeProvider.themeMode},
-                  onSelectionChanged: (selection) async {
-                    try {
-                      await themeProvider.setThemeMode(selection.first);
-                    } on Object {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Não foi possível alterar o tema.'),
-                          ),
-                        );
-                      }
-                    }
-                  },
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.lg),
               const _SectionTitle('Notificações'),
               const SizedBox(height: AppSpacing.sm),
-              ReminderSettingsCard(
-                enabled: notificationProvider.preferences.enabled,
-                time: TimeOfDay(
-                  hour: notificationProvider.preferences.hour,
-                  minute: notificationProvider.preferences.minute,
-                ),
-                isLoading:
-                    notificationProvider.isLoading ||
-                    notificationProvider.isSaving,
-                onEnabledChanged: (enabled) =>
-                    _setReminderEnabled(context, notificationProvider, enabled),
-                onTimeTap: () =>
-                    _selectReminderTime(context, notificationProvider),
-                onTestTap: () =>
-                    _sendTestNotification(context, notificationProvider),
+              _SettingsSectionCard(
+                children: [
+                  ReminderSettingsCard(
+                    embedded: true,
+                    enabled: notificationProvider.preferences.enabled,
+                    time: TimeOfDay(
+                      hour: notificationProvider.preferences.hour,
+                      minute: notificationProvider.preferences.minute,
+                    ),
+                    isLoading:
+                        notificationProvider.isLoading ||
+                        notificationProvider.isSaving,
+                    onEnabledChanged: (enabled) => _setReminderEnabled(
+                      context,
+                      notificationProvider,
+                      enabled,
+                    ),
+                    onTimeTap: () =>
+                        _selectReminderTime(context, notificationProvider),
+                    onTestTap: () =>
+                        _sendTestNotification(context, notificationProvider),
+                  ),
+                  Divider(
+                    color: Theme.of(context).colorScheme.outline,
+                    height: AppSpacing.xs,
+                  ),
+                  BudgetAlertSettingsCard(
+                    embedded: true,
+                    enabled: budgetAlertProvider.preferences.enabled,
+                    thresholdPercentage:
+                        budgetAlertProvider.preferences.thresholdPercentage,
+                    isLoading:
+                        budgetAlertProvider.isLoading ||
+                        budgetAlertProvider.isSaving,
+                    onEnabledChanged: (enabled) => _setBudgetAlertEnabled(
+                      context,
+                      budgetAlertProvider,
+                      enabled,
+                    ),
+                    onThresholdChanged: (percentage) =>
+                        _setBudgetAlertThreshold(
+                          context,
+                          budgetAlertProvider,
+                          percentage,
+                        ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              BudgetAlertSettingsCard(
-                enabled: budgetAlertProvider.preferences.enabled,
-                thresholdPercentage:
-                    budgetAlertProvider.preferences.thresholdPercentage,
-                isLoading:
-                    budgetAlertProvider.isLoading ||
-                    budgetAlertProvider.isSaving,
-                onEnabledChanged: (enabled) => _setBudgetAlertEnabled(
-                  context,
-                  budgetAlertProvider,
-                  enabled,
-                ),
-                onThresholdChanged: (percentage) => _setBudgetAlertThreshold(
-                  context,
-                  budgetAlertProvider,
-                  percentage,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              const _SectionTitle('Categorias'),
+              const SizedBox(height: AppSpacing.lg),
+              const _SectionTitle('Organização'),
               const SizedBox(height: AppSpacing.sm),
               SettingsItemCard(
                 icon: Icons.category_outlined,
@@ -168,35 +190,55 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
-              const _SectionTitle('Dados'),
               const SizedBox(height: AppSpacing.sm),
               SettingsItemCard(
-                icon: Icons.cloud_upload_outlined,
-                title: 'Backup e dados',
-                subtitle: 'Exporte uma c\u00f3pia local dos seus dados',
+                icon: Icons.autorenew_rounded,
+                title: 'Recorrências',
+                subtitle: 'Assinaturas e compras parceladas',
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const BackupPage()),
+                  MaterialPageRoute<void>(
+                    builder: (_) => RecurringExpensesPage(
+                      onAddExpense: onAddExpense ?? () async {},
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
-              const _SectionTitle('Privacidade'),
+              const SizedBox(height: AppSpacing.lg),
+              const _SectionTitle('Dados e privacidade'),
               const SizedBox(height: AppSpacing.sm),
-              const SettingsItemCard(
-                icon: Icons.lock_outline_rounded,
-                title: 'Seus dados ficam neste dispositivo',
-                subtitle:
-                    'O Quanto Posso funciona offline e não envia seus '
-                    'dados financeiros para servidores.',
+              _SettingsSectionCard(
+                children: [
+                  SettingsItemCard(
+                    embedded: true,
+                    icon: Icons.backup_outlined,
+                    title: 'Backup e dados',
+                    subtitle: 'Exporte ou restaure uma cópia dos seus dados',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const BackupPage(),
+                      ),
+                    ),
+                  ),
+                  Divider(
+                    color: Theme.of(context).colorScheme.outline,
+                    height: AppSpacing.xs,
+                  ),
+                  const SettingsItemCard(
+                    embedded: true,
+                    showChevron: false,
+                    icon: Icons.lock_outline_rounded,
+                    title: 'Seus dados ficam neste dispositivo',
+                    subtitle:
+                        'O Quanto Posso funciona offline e não envia seus '
+                        'dados financeiros para servidores.',
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.lg),
               const _SectionTitle('Sobre'),
               const SizedBox(height: AppSpacing.sm),
-              const SettingsItemCard(
-                icon: Icons.info_outline_rounded,
-                title: 'Quanto Posso',
-                subtitle: 'Versão 1.0.0',
-              ),
+              const _AboutCard(),
+              const SizedBox(height: AppSpacing.xxl),
             ],
           ),
         ),
@@ -352,6 +394,228 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({required this.profile, required this.onTap});
+
+  final UserProfile profile;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(AppRadius.card);
+    return Semantics(
+      button: true,
+      label: 'Editar perfil de ${profile.name}',
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: radius,
+          boxShadow: const [AppShadows.card],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: radius,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: radius,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(AppRadius.circular),
+                    ),
+                    child: const Icon(
+                      Icons.person_outline_rounded,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          'Renda mensal: '
+                          '${CurrencyUtils.format(profile.monthlyIncome)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textLight.withValues(alpha: 0.72),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          'Editar perfil',
+                          style: AppTypography.small.copyWith(
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textLight,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsCardHeader extends StatelessWidget {
+  const _SettingsCardHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.xs),
+          decoration: BoxDecoration(
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(AppRadius.circular),
+          ),
+          child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsSectionCard extends StatelessWidget {
+  const _SettingsSectionCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: const [AppShadows.card],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+}
+
+class _AboutCard extends StatelessWidget {
+  const _AboutCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: const [AppShadows.card],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.xs),
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(AppRadius.circular),
+            ),
+            child: Icon(
+              Icons.account_balance_wallet_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quanto Posso',
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'Controle financeiro pessoal offline',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'Versão 1.0.0',
+                  style: AppTypography.small.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.label);
   final String label;
@@ -360,7 +624,9 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: AppTypography.bodyMedium.copyWith(color: AppColors.primary),
+      style: AppTypography.bodyMedium.copyWith(
+        color: Theme.of(context).colorScheme.primary,
+      ),
     );
   }
 }

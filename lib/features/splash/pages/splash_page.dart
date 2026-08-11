@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:quanto_posso/app/theme/app_colors.dart';
 import 'package:quanto_posso/shared/widgets/app_logo.dart';
 
 class SplashPage extends StatelessWidget {
@@ -7,9 +6,9 @@ class SplashPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: AppColors.backgroundLight,
-      body: SafeArea(child: Center(child: AppLogo(width: 220))),
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: const SafeArea(child: Center(child: AppLogo(width: 220))),
     );
   }
 }

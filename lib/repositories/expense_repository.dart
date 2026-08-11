@@ -1,6 +1,7 @@
 import 'package:quanto_posso/core/database/app_database.dart';
 import 'package:quanto_posso/models/daily_expense_total.dart';
 import 'package:quanto_posso/models/expense.dart';
+import 'package:quanto_posso/models/monthly_expense_summary.dart';
 
 class ExpenseRepository {
   ExpenseRepository({AppDatabase? database})
@@ -200,6 +201,65 @@ class ExpenseRepository {
           ),
         )
         .toList(growable: false);
+  }
+
+  Future<List<MonthlyExpenseSummary>> getMonthlySummaries({
+    required DateTime startMonth,
+    required DateTime endMonth,
+  }) async {
+    final normalizedStart = DateTime(startMonth.year, startMonth.month);
+    final normalizedEnd = DateTime(endMonth.year, endMonth.month);
+    if (normalizedStart.isAfter(normalizedEnd)) {
+      throw ArgumentError(
+        'O mês inicial deve ser anterior ou igual ao mês final',
+      );
+    }
+    final exclusiveEnd = DateTime(normalizedEnd.year, normalizedEnd.month + 1);
+    final database = await _database.database;
+    final result = await database.rawQuery(
+      '''
+        SELECT
+          strftime('%Y-%m', occurred_at) AS expense_month,
+          COALESCE(SUM(amount), 0) AS total,
+          COUNT(*) AS expense_count
+        FROM $_expensesTable
+        WHERE occurred_at >= ?
+          AND occurred_at < ?
+        GROUP BY strftime('%Y-%m', occurred_at)
+        ORDER BY expense_month ASC
+      ''',
+      [normalizedStart.toIso8601String(), exclusiveEnd.toIso8601String()],
+    );
+
+    return result
+        .map((row) {
+          final monthParts = (row['expense_month'] as String).split('-');
+          return MonthlyExpenseSummary(
+            month: DateTime(
+              int.parse(monthParts.first),
+              int.parse(monthParts.last),
+            ),
+            total: (row['total'] as num).toDouble(),
+            expenseCount: (row['expense_count'] as num).toInt(),
+          );
+        })
+        .toList(growable: false);
+  }
+
+  Future<Expense?> getHighestExpenseBetween({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    _validatePeriod(start, end);
+    final database = await _database.database;
+    final result = await database.query(
+      _expensesTable,
+      where: 'occurred_at >= ? AND occurred_at < ?',
+      whereArgs: [start.toIso8601String(), end.toIso8601String()],
+      orderBy: 'amount DESC, occurred_at DESC',
+      limit: 1,
+    );
+    return result.isEmpty ? null : Expense.fromMap(result.first);
   }
 
   Expense _withNormalizedDescription(Expense expense) {

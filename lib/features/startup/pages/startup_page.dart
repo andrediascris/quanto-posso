@@ -58,6 +58,8 @@ class StartupPage extends StatelessWidget {
             Navigator.of(profileContext).push(
               MaterialPageRoute<void>(
                 builder: (categoryContext) => CategorySetupPage(
+                  name: name,
+                  monthlyIncome: monthlyIncome,
                   onFinish: (selectedCategories) async {
                     try {
                       await provider.completeSetup(

@@ -21,7 +21,7 @@ class AppColors {
   static const Color backgroundLight = Color(0xFFF8F9FC);
 
   /// Fundo principal escuro
-  static const Color backgroundDark = Color(0xFF12102F);
+  static const Color backgroundDark = Color(0xFF111827);
 
   // ===============================
   // SURFACE COLORS
@@ -31,7 +31,10 @@ class AppColors {
   static const Color surfaceLight = Color(0xFFFFFFFF);
 
   /// Cards no tema escuro
-  static const Color surfaceDark = Color(0xFF242252);
+  static const Color surfaceDark = Color(0xFF1B2433);
+
+  /// Superfícies elevadas, campos e navegação no tema escuro
+  static const Color surfaceElevatedDark = Color(0xFF263244);
 
   // ===============================
   // TEXT COLORS
@@ -42,6 +45,18 @@ class AppColors {
   static const Color textSecondary = Color(0xFF7C7A99);
 
   static const Color textLight = Color(0xFFFFFFFF);
+
+  /// Texto principal no tema escuro, suavemente abaixo do branco puro
+  static const Color textPrimaryDark = Color(0xFFE8ECF3);
+
+  /// Texto secundário no tema escuro
+  static const Color textSecondaryDark = Color(0xFFAAB4C3);
+
+  /// Azul claro para ações e ícones no tema escuro
+  static const Color primaryDark = Color(0xFF9AAEFF);
+
+  /// Ícones comuns no tema escuro
+  static const Color iconDark = Color(0xFFDCE3ED);
 
   // ===============================
   // STATUS COLORS
@@ -61,6 +76,9 @@ class AppColors {
   // ===============================
 
   static const Color border = Color(0xFFE5E5EF);
+
+  /// Bordas discretas sobre superfícies escuras
+  static const Color borderDark = Color(0xFF3A4658);
 
   static const Color disabled = Color(0xFFB7B6C8);
 }

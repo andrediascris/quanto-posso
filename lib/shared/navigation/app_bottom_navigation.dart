@@ -15,19 +15,37 @@ class AppBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.brightness == Brightness.dark;
     return NavigationBarTheme(
       data: NavigationBarThemeData(
-        backgroundColor: AppColors.surfaceLight,
-        indicatorColor: AppColors.accent,
+        backgroundColor: isDark
+            ? colorScheme.surfaceContainerHigh
+            : AppColors.surfaceLight,
+        indicatorColor: isDark
+            ? AppColors.accent.withValues(alpha: 0.22)
+            : AppColors.accent,
         indicatorShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.medium),
         ),
-        labelTextStyle: WidgetStatePropertyAll(
-          AppTypography.small.copyWith(color: AppColors.primary),
-        ),
-        iconTheme: const WidgetStatePropertyAll(
-          IconThemeData(color: AppColors.primary),
-        ),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          final color = isDark
+              ? (selected
+                    ? colorScheme.secondary
+                    : colorScheme.onSurfaceVariant)
+              : AppColors.primary;
+          return AppTypography.small.copyWith(color: color);
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          final color = isDark
+              ? (selected
+                    ? colorScheme.secondary
+                    : colorScheme.onSurfaceVariant)
+              : AppColors.primary;
+          return IconThemeData(color: color);
+        }),
       ),
       child: NavigationBar(
         selectedIndex: currentIndex,

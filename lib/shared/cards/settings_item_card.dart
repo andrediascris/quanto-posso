@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:quanto_posso/app/theme/app_colors.dart';
 import 'package:quanto_posso/app/theme/app_radius.dart';
 import 'package:quanto_posso/app/theme/app_shadows.dart';
 import 'package:quanto_posso/app/theme/app_spacing.dart';
@@ -14,6 +13,9 @@ class SettingsItemCard extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.iconColor,
+    this.backgroundColor,
+    this.showChevron = true,
+    this.embedded = false,
   });
 
   final IconData icon;
@@ -22,20 +24,73 @@ class SettingsItemCard extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
   final Color? iconColor;
+  final Color? backgroundColor;
+  final bool showChevron;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final borderRadius = BorderRadius.circular(AppRadius.card);
-    final effectiveIconColor = iconColor ?? AppColors.primary;
+    final effectiveIconColor = iconColor ?? colorScheme.primary;
+
+    final content = Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.xs),
+            decoration: BoxDecoration(
+              color: effectiveIconColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(AppRadius.circular),
+            ),
+            child: Icon(icon, color: effectiveIconColor),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    subtitle!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null)
+            trailing!
+          else if (onTap != null && showChevron)
+            Icon(Icons.chevron_right_rounded, color: colorScheme.primary),
+        ],
+      ),
+    );
 
     return Semantics(
       button: onTap != null,
       label: title,
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surfaceLight,
+          color: embedded
+              ? colorScheme.surface.withValues(alpha: 0)
+              : backgroundColor ?? colorScheme.surface,
           borderRadius: borderRadius,
-          boxShadow: const [AppShadows.card],
+          boxShadow: embedded ? AppShadows.none : const [AppShadows.card],
         ),
         child: Material(
           type: MaterialType.transparency,
@@ -44,51 +99,7 @@ class SettingsItemCard extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             borderRadius: borderRadius,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.cardPadding),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.xs),
-                    decoration: BoxDecoration(
-                      color: effectiveIconColor.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(AppRadius.small),
-                    ),
-                    child: Icon(icon, color: effectiveIconColor),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: AppSpacing.xxs),
-                          Text(
-                            subtitle!,
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (trailing != null)
-                    trailing!
-                  else if (onTap != null)
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.primary,
-                    ),
-                ],
-              ),
-            ),
+            child: content,
           ),
         ),
       ),

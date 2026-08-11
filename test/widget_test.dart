@@ -1,10 +1,15 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quanto_posso/app/app.dart';
+import 'package:quanto_posso/app/theme/app_colors.dart';
+import 'package:quanto_posso/app/theme/app_spacing.dart';
 import 'package:quanto_posso/core/notifications/local_notification_service.dart';
 import 'package:quanto_posso/models/expense.dart';
+import 'package:quanto_posso/models/expense_type.dart';
 import 'package:quanto_posso/models/daily_expense_total.dart';
 import 'package:quanto_posso/models/expense_category.dart';
+import 'package:quanto_posso/models/monthly_expense_summary.dart';
 import 'package:quanto_posso/models/user_profile.dart';
 import 'package:quanto_posso/models/reminder_preferences.dart';
 import 'package:quanto_posso/models/budget_alert_preferences.dart';
@@ -18,6 +23,7 @@ import 'package:quanto_posso/repositories/preferences_repository.dart';
 import 'package:quanto_posso/repositories/setup_repository.dart';
 import 'package:quanto_posso/shared/cards/budget_alert_settings_card.dart';
 import 'package:quanto_posso/shared/buttons/primary_button.dart';
+import 'package:quanto_posso/shared/charts/monthly_expense_line_chart.dart';
 
 class FakeSetupRepository extends SetupRepository {
   FakeSetupRepository({
@@ -145,7 +151,19 @@ class FakeExpenseRepository extends ExpenseRepository {
     required DateTime start,
     required DateTime end,
   }) async {
-    return const {};
+    final totals = <String, double>{};
+    for (final expense in expenses.where(
+      (expense) =>
+          !expense.occurredAt.isBefore(start) &&
+          expense.occurredAt.isBefore(end),
+    )) {
+      totals.update(
+        expense.categoryId,
+        (total) => total + expense.amount,
+        ifAbsent: () => expense.amount,
+      );
+    }
+    return totals;
   }
 
   @override
@@ -153,12 +171,80 @@ class FakeExpenseRepository extends ExpenseRepository {
     required DateTime start,
     required DateTime end,
   }) async {
-    return const [];
+    final totals = <DateTime, double>{};
+    for (final expense in expenses.where(
+      (expense) =>
+          !expense.occurredAt.isBefore(start) &&
+          expense.occurredAt.isBefore(end),
+    )) {
+      final day = DateTime(
+        expense.occurredAt.year,
+        expense.occurredAt.month,
+        expense.occurredAt.day,
+      );
+      totals.update(
+        day,
+        (total) => total + expense.amount,
+        ifAbsent: () => expense.amount,
+      );
+    }
+    final result = [
+      for (final entry in totals.entries)
+        DailyExpenseTotal(day: entry.key, total: entry.value),
+    ]..sort((first, second) => first.day.compareTo(second.day));
+    return result;
+  }
+
+  @override
+  Future<List<MonthlyExpenseSummary>> getMonthlySummaries({
+    required DateTime startMonth,
+    required DateTime endMonth,
+  }) async {
+    final totals = <String, MonthlyExpenseSummary>{};
+    for (final expense in expenses) {
+      final month = DateTime(expense.occurredAt.year, expense.occurredAt.month);
+      final normalizedStart = DateTime(startMonth.year, startMonth.month);
+      final normalizedEnd = DateTime(endMonth.year, endMonth.month);
+      if (month.isBefore(normalizedStart) || month.isAfter(normalizedEnd)) {
+        continue;
+      }
+      final key = '${month.year}-${month.month}';
+      final current = totals[key];
+      totals[key] = MonthlyExpenseSummary(
+        month: month,
+        total: (current?.total ?? 0) + expense.amount,
+        expenseCount: (current?.expenseCount ?? 0) + 1,
+      );
+    }
+    final result = totals.values.toList()
+      ..sort((first, second) => first.month.compareTo(second.month));
+    return result;
+  }
+
+  @override
+  Future<Expense?> getHighestExpenseBetween({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final candidates =
+        expenses
+            .where(
+              (expense) =>
+                  !expense.occurredAt.isBefore(start) &&
+                  expense.occurredAt.isBefore(end),
+            )
+            .toList()
+          ..sort((first, second) {
+            final amountComparison = second.amount.compareTo(first.amount);
+            if (amountComparison != 0) return amountComparison;
+            return second.occurredAt.compareTo(first.occurredAt);
+          });
+    return candidates.isEmpty ? null : candidates.first;
   }
 }
 
 class FakeWidgetPreferencesRepository extends PreferencesRepository {
-  ThemeMode mode = ThemeMode.system;
+  ThemeMode mode = ThemeMode.light;
   ReminderPreferences reminderPreferences = ReminderPreferences.defaults;
   BudgetAlertPreferences budgetAlertPreferences =
       BudgetAlertPreferences.defaults;
@@ -193,7 +279,7 @@ class FakeWidgetPreferencesRepository extends PreferencesRepository {
 
   @override
   Future<void> clear() async {
-    mode = ThemeMode.system;
+    mode = ThemeMode.light;
   }
 }
 
@@ -270,6 +356,183 @@ class FakeWidgetBackupRepository extends BackupRepository {
 }
 
 void main() {
+  testWidgets('tema escuro renderiza as quatro telas principais', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime.now();
+    final preferencesRepository = FakeWidgetPreferencesRepository()
+      ..mode = ThemeMode.dark;
+    await tester.pumpWidget(
+      QuantoPossoApp(
+        setupRepository: FakeSetupRepository(
+          profile: UserProfile(
+            id: 1,
+            name: 'Andr\u00e9',
+            monthlyIncome: 3500,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          categories: [
+            ExpenseCategory(
+              id: 'food',
+              name: 'Alimenta\u00e7\u00e3o',
+              iconCodePoint: Icons.restaurant_rounded.codePoint,
+              iconFontFamily:
+                  Icons.restaurant_rounded.fontFamily ?? 'MaterialIcons',
+              colorValue: AppColors.primary.toARGB32(),
+              isDefault: true,
+              createdAt: now,
+            ),
+          ],
+        ),
+        expenseRepository: FakeExpenseRepository(),
+        preferencesRepository: preferencesRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final homeContext = tester.element(find.byType(Scaffold).first);
+    final homeTheme = Theme.of(homeContext);
+    expect(homeTheme.brightness, Brightness.dark);
+    expect(homeTheme.scaffoldBackgroundColor, AppColors.backgroundDark);
+    expect(
+      homeTheme.colorScheme.surface,
+      isNot(homeTheme.scaffoldBackgroundColor),
+    );
+    expect(
+      homeTheme.colorScheme.onSurface,
+      isNot(homeTheme.colorScheme.surface),
+    );
+
+    for (final destination in [
+      'Dashboard',
+      'Hist\u00f3rico',
+      'Configura\u00e7\u00f5es',
+      'Home',
+    ]) {
+      await tester.tap(find.text(destination));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(
+        Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+        Brightness.dark,
+      );
+    }
+
+    final navigationContext = tester.element(find.byType(NavigationBar));
+    final navigationTheme = NavigationBarTheme.of(navigationContext);
+    final selectedIconColor = navigationTheme.iconTheme?.resolve({
+      WidgetState.selected,
+    })?.color;
+    final unselectedIconColor = navigationTheme.iconTheme?.resolve({})?.color;
+    expect(selectedIconColor, isNotNull);
+    expect(unselectedIconColor, isNotNull);
+    expect(selectedIconColor, isNot(unselectedIconColor));
+  });
+
+  testWidgets('preferência antiga do sistema abre o aplicativo no tema claro', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime.now();
+    await tester.pumpWidget(
+      QuantoPossoApp(
+        setupRepository: FakeSetupRepository(
+          profile: UserProfile(
+            id: 1,
+            name: 'Andr\u00e9',
+            monthlyIncome: 3500,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          categories: [
+            ExpenseCategory(
+              id: 'food',
+              name: 'Alimenta\u00e7\u00e3o',
+              iconCodePoint: Icons.restaurant_rounded.codePoint,
+              iconFontFamily:
+                  Icons.restaurant_rounded.fontFamily ?? 'MaterialIcons',
+              colorValue: AppColors.primary.toARGB32(),
+              isDefault: true,
+              createdAt: now,
+            ),
+          ],
+        ),
+        expenseRepository: FakeExpenseRepository(),
+        preferencesRepository: FakeWidgetPreferencesRepository()
+          ..mode = ThemeMode.system,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+      Brightness.light,
+    );
+  });
+
+  testWidgets('modos claro e escuro ignoram o brilho oposto do sistema', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime.now();
+    final setupRepository = FakeSetupRepository(
+      profile: UserProfile(
+        id: 1,
+        name: 'Andr\u00e9',
+        monthlyIncome: 3500,
+        createdAt: now,
+        updatedAt: now,
+      ),
+      categories: [
+        ExpenseCategory(
+          id: 'food',
+          name: 'Alimenta\u00e7\u00e3o',
+          iconCodePoint: Icons.restaurant_rounded.codePoint,
+          iconFontFamily:
+              Icons.restaurant_rounded.fontFamily ?? 'MaterialIcons',
+          colorValue: AppColors.primary.toARGB32(),
+          isDefault: true,
+          createdAt: now,
+        ),
+      ],
+    );
+
+    tester.binding.platformDispatcher.platformBrightnessTestValue =
+        Brightness.dark;
+    addTearDown(
+      tester.binding.platformDispatcher.clearPlatformBrightnessTestValue,
+    );
+    await tester.pumpWidget(
+      QuantoPossoApp(
+        setupRepository: setupRepository,
+        expenseRepository: FakeExpenseRepository(),
+        preferencesRepository: FakeWidgetPreferencesRepository()
+          ..mode = ThemeMode.light,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+      Brightness.light,
+    );
+
+    tester.binding.platformDispatcher.platformBrightnessTestValue =
+        Brightness.light;
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(
+      QuantoPossoApp(
+        setupRepository: setupRepository,
+        expenseRepository: FakeExpenseRepository(),
+        preferencesRepository: FakeWidgetPreferencesRepository()
+          ..mode = ThemeMode.dark,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+      Brightness.dark,
+    );
+  });
+
   testWidgets('abre a tela de backup pelas configura\u00e7\u00f5es', (
     WidgetTester tester,
   ) async {
@@ -382,7 +645,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byType(PrimaryButton));
 
-    expect(find.text('Saiba quanto você ainda pode gastar.'), findsOneWidget);
+    expect(find.text('Quanto Posso'), findsOneWidget);
+    expect(find.text('Cuide melhor do seu dinheiro'), findsOneWidget);
 
     await tester.tap(find.text('Começar'));
     await tester.pumpAndSettle();
@@ -396,9 +660,15 @@ void main() {
     await tester.tap(continueButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Escolha suas categorias'), findsOneWidget);
+    expect(find.text('Organize seus gastos'), findsOneWidget);
 
-    await tester.tap(find.text('Finalizar configuração'));
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tudo pronto!'), findsOneWidget);
+    expect(find.text('Ir para a Home'), findsOneWidget);
+
+    await tester.tap(find.text('Ir para a Home'));
     await tester.pumpAndSettle();
 
     expect(find.text('Olá, André!'), findsOneWidget);
@@ -443,7 +713,69 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Olá, André!'), findsOneWidget);
+    expect(find.text('Veja como estão seus gastos hoje.'), findsOneWidget);
+    expect(find.text('Saldo atual'), findsOneWidget);
+    expect(find.text('Gasto neste mês'), findsOneWidget);
+    expect(find.text('Renda mensal'), findsOneWidget);
+    expect(find.text('Gastos recentes'), findsOneWidget);
+    expect(find.text('Ver histórico'), findsOneWidget);
+    expect(find.text('Nenhum gasto registrado hoje.'), findsOneWidget);
+    expect(find.byTooltip('Adicionar gasto'), findsOneWidget);
+    expect(find.byType(PieChart), findsNothing);
     expect(find.text('Saiba quanto você ainda pode gastar.'), findsNothing);
+  });
+
+  testWidgets('Home permanece responsiva em telas mobile', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(412, 915));
+    final now = DateTime(2026);
+
+    await tester.pumpWidget(
+      QuantoPossoApp(
+        setupRepository: FakeSetupRepository(
+          profile: UserProfile(
+            id: 1,
+            name: 'André da Silva',
+            monthlyIncome: 123456.78,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          categories: [
+            ExpenseCategory(
+              id: 'food',
+              name: 'Alimentação',
+              iconCodePoint: Icons.restaurant_rounded.codePoint,
+              iconFontFamily:
+                  Icons.restaurant_rounded.fontFamily ?? 'MaterialIcons',
+              colorValue: 0xFF1D1B4F,
+              isDefault: true,
+              createdAt: now,
+            ),
+          ],
+        ),
+        expenseRepository: FakeExpenseRepository(),
+        preferencesRepository: FakeWidgetPreferencesRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    const mobileSizes = [Size(360, 800), Size(412, 915), Size(411, 923)];
+    for (final size in mobileSizes) {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Olá, André!'), findsOneWidget);
+      expect(find.text('Saldo atual'), findsOneWidget);
+      expect(find.text('Gasto neste mês'), findsOneWidget);
+      expect(find.text('Renda mensal'), findsOneWidget);
+      expect(find.text('Gastos recentes'), findsOneWidget);
+      expect(find.text('Nenhum gasto registrado hoje.'), findsOneWidget);
+      expect(find.byTooltip('Adicionar gasto'), findsOneWidget);
+      expect(find.byType(PieChart), findsNothing);
+      expect(tester.takeException(), isNull, reason: 'Falha no tamanho $size');
+    }
   });
 
   testWidgets('abre o formulário de novo gasto pela Home', (
@@ -471,7 +803,6 @@ void main() {
         ),
       ],
     );
-
     await tester.pumpWidget(
       QuantoPossoApp(
         setupRepository: repository,
@@ -487,10 +818,13 @@ void main() {
     await tester.tap(addButton);
     await tester.pumpAndSettle();
 
+    expect(find.text('Adicionar gasto'), findsOneWidget);
     expect(find.text('Novo gasto'), findsOneWidget);
-    expect(find.text('Valor'), findsOneWidget);
+    expect(find.text('Valor do gasto'), findsOneWidget);
     expect(find.text('Categoria'), findsOneWidget);
+    expect(find.text('Data'), findsOneWidget);
     expect(find.text('Descrição opcional'), findsOneWidget);
+    expect(find.text('Salvar gasto'), findsOneWidget);
   });
 
   testWidgets('abre a aba de histórico pelo menu inferior', (
@@ -534,8 +868,277 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Histórico'), findsWidgets);
+    expect(find.text('Consulte e gerencie seus gastos.'), findsOneWidget);
     expect(find.text('Pesquisar'), findsOneWidget);
-    expect(find.text('Todas as categorias'), findsOneWidget);
+    expect(find.text('Buscar por descrição'), findsOneWidget);
+    expect(find.byTooltip('Abrir filtros avançados'), findsOneWidget);
+    expect(find.text('Todo o período'), findsOneWidget);
+    expect(find.text('Todas categorias'), findsOneWidget);
+    expect(find.text('Mais recentes'), findsOneWidget);
+    expect(find.text('0 gastos registrados'), findsOneWidget);
+    expect(find.text('Total filtrado'), findsOneWidget);
+    expect(find.text('Nenhum gasto registrado.'), findsOneWidget);
+    expect(find.byTooltip('Adicionar gasto'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField), 'inexistente');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nenhum gasto encontrado.'), findsOneWidget);
+    expect(
+      find.text('Altere ou limpe os filtros para ver outros resultados.'),
+      findsOneWidget,
+    );
+    expect(find.text('Limpar'), findsOneWidget);
+    expect(find.text('Limpar filtros', skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('Histórico permanece responsivo em telas mobile', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    final now = DateTime.now();
+    final category = ExpenseCategory(
+      id: 'food',
+      name: 'Alimentação e restaurantes favoritos',
+      iconCodePoint: Icons.restaurant_rounded.codePoint,
+      iconFontFamily: Icons.restaurant_rounded.fontFamily ?? 'MaterialIcons',
+      colorValue: 0xFF1D1B4F,
+      isDefault: true,
+      createdAt: now,
+    );
+    final expenseRepository = FakeExpenseRepository();
+    expenseRepository.expenses.addAll([
+      Expense(
+        id: 1,
+        amount: 123456.78,
+        categoryId: category.id,
+        description: 'Descrição extensa para validar responsividade do item',
+        occurredAt: now,
+        createdAt: now,
+        updatedAt: now,
+      ),
+      Expense(
+        id: 2,
+        amount: 9876543.21,
+        categoryId: category.id,
+        description: 'Assinatura com uma descrição muito longa',
+        occurredAt: now,
+        createdAt: now,
+        updatedAt: now,
+        recurringPlanId: 1,
+        occurrenceNumber: 1,
+        recurringType: ExpenseType.subscription,
+      ),
+      Expense(
+        id: 3,
+        amount: 3333333.33,
+        categoryId: category.id,
+        description: 'Compra parcelada com uma descrição muito longa',
+        occurredAt: now,
+        createdAt: now,
+        updatedAt: now,
+        recurringPlanId: 2,
+        occurrenceNumber: 12,
+        occurrenceTotal: 120,
+        recurringType: ExpenseType.installment,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      QuantoPossoApp(
+        setupRepository: FakeSetupRepository(
+          profile: UserProfile(
+            id: 1,
+            name: 'André',
+            monthlyIncome: 200000,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          categories: [category],
+        ),
+        expenseRepository: expenseRepository,
+        preferencesRepository: FakeWidgetPreferencesRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Histórico'));
+    await tester.pumpAndSettle();
+
+    const mobileSizes = [Size(360, 800), Size(412, 915), Size(411, 923)];
+    for (final size in mobileSizes) {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Consulte e gerencie seus gastos.'), findsOneWidget);
+      expect(find.byTooltip('Abrir filtros avançados'), findsOneWidget);
+      expect(find.text('Todo o período'), findsOneWidget);
+      expect(find.text('Todas categorias'), findsOneWidget);
+      expect(find.text('Mais recentes'), findsOneWidget);
+      expect(find.text('3 gastos registrados'), findsOneWidget);
+      expect(find.text('Assinatura'), findsOneWidget);
+      expect(find.textContaining('123.456,78'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Parcela 12 de 120'),
+        AppSpacing.buttonHeight,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Parcela 12 de 120'), findsOneWidget);
+      expect(find.byTooltip('Editar gasto'), findsWidgets);
+      expect(find.byTooltip('Excluir gasto'), findsWidgets);
+      expect(tester.takeException(), isNull, reason: 'Falha no tamanho $size');
+    }
+  });
+
+  testWidgets('filtros rápidos aplicam período, categoria e ordenação', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(412, 915));
+    final now = DateTime.now();
+    final categories = [
+      ExpenseCategory(
+        id: 'food',
+        name: 'Alimentação com nome muito extenso',
+        iconCodePoint: Icons.restaurant_rounded.codePoint,
+        iconFontFamily: Icons.restaurant_rounded.fontFamily ?? 'MaterialIcons',
+        colorValue: 0xFF1D1B4F,
+        isDefault: true,
+        createdAt: now,
+      ),
+      ExpenseCategory(
+        id: 'transport',
+        name: 'Transporte',
+        iconCodePoint: Icons.directions_car_rounded.codePoint,
+        iconFontFamily:
+            Icons.directions_car_rounded.fontFamily ?? 'MaterialIcons',
+        colorValue: 0xFFFFB020,
+        isDefault: true,
+        createdAt: now,
+      ),
+    ];
+    final expenseRepository = FakeExpenseRepository()
+      ..expenses.addAll([
+        Expense(
+          id: 1,
+          amount: 10,
+          categoryId: 'food',
+          description: 'Valor baixo',
+          occurredAt: DateTime(now.year, now.month, 2),
+          createdAt: now,
+          updatedAt: now,
+        ),
+        Expense(
+          id: 2,
+          amount: 100,
+          categoryId: 'transport',
+          description: 'Valor alto',
+          occurredAt: DateTime(now.year, now.month, 3),
+          createdAt: now,
+          updatedAt: now,
+        ),
+        Expense(
+          id: 3,
+          amount: 50,
+          categoryId: 'food',
+          description: 'Valor antigo',
+          occurredAt: DateTime(now.year - 1, now.month, 1),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ]);
+
+    await tester.pumpWidget(
+      QuantoPossoApp(
+        setupRepository: FakeSetupRepository(
+          profile: UserProfile(
+            id: 1,
+            name: 'André',
+            monthlyIncome: 5000,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          categories: categories,
+        ),
+        expenseRepository: expenseRepository,
+        preferencesRepository: FakeWidgetPreferencesRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Histórico'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Todo o período'));
+    await tester.pumpAndSettle();
+    expect(find.text('Selecionar período'), findsOneWidget);
+    expect(find.text('Filtros avançados'), findsNothing);
+    await tester.tap(find.text('Este mês'));
+    await tester.pumpAndSettle();
+    expect(find.text('Este mês'), findsOneWidget);
+    expect(find.text('2 gastos encontrados'), findsOneWidget);
+
+    await tester.ensureVisible(find.byTooltip('Selecionar categoria'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Selecionar categoria'));
+    await tester.pumpAndSettle();
+    expect(find.text('Selecionar categoria'), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Transporte'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Transporte'), findsWidgets);
+    expect(find.text('1 gastos encontrados'), findsOneWidget);
+    expect(find.textContaining('100,00'), findsWidgets);
+
+    await tester.ensureVisible(find.byTooltip('Selecionar categoria'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Selecionar categoria'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Todas categorias'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byTooltip('Alterar ordenação'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Alterar ordenação'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alterar ordenação'), findsOneWidget);
+    await tester.tap(find.text('Maior valor'));
+    await tester.pumpAndSettle();
+    expect(find.text('Maior valor'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Valor alto')).dy,
+      lessThan(tester.getTopLeft(find.text('Valor baixo')).dy),
+    );
+
+    await tester.tap(find.byTooltip('Abrir filtros avançados'));
+    await tester.pumpAndSettle();
+    expect(find.text('Filtros avançados'), findsOneWidget);
+    final dropdowns = find.byWidgetPredicate(
+      (widget) => widget is DropdownButtonFormField,
+    );
+    await tester.tap(dropdowns.last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Menor valor').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Fechar filtros'));
+    await tester.pumpAndSettle();
+    expect(find.text('Menor valor'), findsOneWidget);
+
+    await tester.tap(find.text('Limpar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Todo o período'), findsOneWidget);
+    expect(find.text('Todas categorias'), findsOneWidget);
+    expect(find.text('Mais recentes'), findsOneWidget);
+    expect(find.text('3 gastos registrados'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('abre a Dashboard financeira pelo menu inferior', (
@@ -577,16 +1180,234 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard'), findsWidgets);
+    expect(find.text('Visão geral das suas finanças'), findsOneWidget);
+    expect(find.text('Este mês'), findsOneWidget);
+    expect(find.text('Renda do mês'), findsOneWidget);
     expect(find.text('Total gasto'), findsOneWidget);
     expect(find.text('Saldo restante'), findsOneWidget);
     expect(find.text('Gastos por categoria'), findsOneWidget);
-    expect(find.text('Evolução no mês'), findsOneWidget);
+    expect(find.text('Evolução dos gastos'), findsOneWidget);
+    expect(find.text('Comparação com mês anterior'), findsOneWidget);
+    expect(find.text('Maiores gastos do mês'), findsOneWidget);
+    expect(find.text('Insight do mês'), findsOneWidget);
+    expect(find.text('Uso da renda'), findsNothing);
+    expect(find.text('Projeção do mês'), findsNothing);
+    expect(find.text('Maior gasto'), findsNothing);
+    expect(find.text('Evolução dos últimos 6 meses'), findsNothing);
+    expect(find.text('Resumo anual'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Dashboard abre listas completas e alterna evolução', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(412, 915));
+    final now = DateTime.now();
+    final categories = [
+      ExpenseCategory(
+        id: 'food',
+        name: 'Alimentação',
+        iconCodePoint: Icons.restaurant_rounded.codePoint,
+        iconFontFamily: Icons.restaurant_rounded.fontFamily ?? 'MaterialIcons',
+        colorValue: 0xFF1D1B4F,
+        isDefault: true,
+        createdAt: now,
+      ),
+      ExpenseCategory(
+        id: 'transport',
+        name: 'Transporte',
+        iconCodePoint: Icons.directions_car_rounded.codePoint,
+        iconFontFamily:
+            Icons.directions_car_rounded.fontFamily ?? 'MaterialIcons',
+        colorValue: 0xFFE3B53F,
+        isDefault: true,
+        createdAt: now,
+      ),
+    ];
+    final expenses = FakeExpenseRepository()
+      ..expenses.addAll([
+        Expense(
+          id: 1,
+          amount: 300,
+          categoryId: 'food',
+          occurredAt: DateTime(now.year, now.month, 2),
+          createdAt: now,
+          updatedAt: now,
+        ),
+        Expense(
+          id: 2,
+          amount: 100,
+          categoryId: 'transport',
+          occurredAt: DateTime(now.year, now.month, 3),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ]);
+
+    await tester.pumpWidget(
+      QuantoPossoApp(
+        setupRepository: FakeSetupRepository(
+          profile: UserProfile(
+            id: 1,
+            name: 'André',
+            monthlyIncome: 3500,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          categories: categories,
+        ),
+        expenseRepository: expenses,
+        preferencesRepository: FakeWidgetPreferencesRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Ver todas'));
+    await tester.pumpAndSettle();
+    expect(find.text('Todas as categorias'), findsOneWidget);
+    expect(find.text('Alimentação'), findsWidgets);
+    expect(find.text('75,0%'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('Fechar'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Ver ranking'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ver ranking'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ranking por categoria'), findsOneWidget);
+    expect(find.text('1º'), findsOneWidget);
+    expect(find.text('2º'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('Fechar'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MonthlyExpenseLineChart), findsOneWidget);
+    await tester.ensureVisible(find.text('Diário'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Diário'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mensal').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(MonthlyExpenseLineChart), findsNothing);
+    expect(find.byType(SixMonthExpenseLineChart), findsOneWidget);
+    expect(find.text('Mensal'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Dashboard permanece responsiva em telas mobile', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final now = DateTime.now();
+    final categories = [
+      ExpenseCategory(
+        id: 'food',
+        name: 'Alimentação e restaurantes favoritos',
+        iconCodePoint: Icons.restaurant_rounded.codePoint,
+        iconFontFamily: Icons.restaurant_rounded.fontFamily ?? 'MaterialIcons',
+        colorValue: 0xFF1D1B4F,
+        isDefault: true,
+        createdAt: now,
+      ),
+      ExpenseCategory(
+        id: 'transport',
+        name: 'Transporte',
+        iconCodePoint: Icons.directions_car_rounded.codePoint,
+        iconFontFamily:
+            Icons.directions_car_rounded.fontFamily ?? 'MaterialIcons',
+        colorValue: 0xFFE3B53F,
+        isDefault: true,
+        createdAt: now,
+      ),
+      ExpenseCategory(
+        id: 'subscriptions',
+        name: 'Assinaturas',
+        iconCodePoint: Icons.subscriptions_rounded.codePoint,
+        iconFontFamily:
+            Icons.subscriptions_rounded.fontFamily ?? 'MaterialIcons',
+        colorValue: 0xFF4A7C59,
+        isDefault: false,
+        createdAt: now,
+      ),
+    ];
+    final expenseRepository = FakeExpenseRepository();
+    expenseRepository.expenses.addAll([
+      Expense(
+        id: 1,
+        amount: 1890.45,
+        categoryId: 'food',
+        description: 'Mercado',
+        occurredAt: DateTime(now.year, now.month, 1),
+        createdAt: now,
+        updatedAt: now,
+      ),
+      Expense(
+        id: 2,
+        amount: 987.65,
+        categoryId: 'transport',
+        description: 'Combustível',
+        occurredAt: DateTime(now.year, now.month, 3),
+        createdAt: now,
+        updatedAt: now,
+      ),
+      Expense(
+        id: 3,
+        amount: 456.78,
+        categoryId: 'subscriptions',
+        description: 'Serviços digitais',
+        occurredAt: DateTime(now.year, now.month, 5),
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ]);
+    const mobileSizes = [Size(360, 800), Size(412, 915), Size(411, 923)];
+
+    for (final size in mobileSizes) {
+      await tester.binding.setSurfaceSize(const Size(800, 1000));
+      await tester.pumpWidget(
+        QuantoPossoApp(
+          setupRepository: FakeSetupRepository(
+            profile: UserProfile(
+              id: 1,
+              name: 'André',
+              monthlyIncome: 123456.78,
+              createdAt: now,
+              updatedAt: now,
+            ),
+            categories: categories,
+          ),
+          expenseRepository: expenseRepository,
+          preferencesRepository: FakeWidgetPreferencesRepository(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gastos por categoria'), findsOneWidget);
+      expect(find.text('Evolução dos gastos'), findsOneWidget);
+      expect(find.text('Comparação com mês anterior'), findsOneWidget);
+      expect(find.text('Maiores gastos do mês'), findsOneWidget);
+      expect(find.text('Insight do mês'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'Falha no tamanho $size');
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
   });
 
   testWidgets('abre Configurações e a edição do perfil', (
     WidgetTester tester,
   ) async {
     final now = DateTime(2026);
+    final preferencesRepository = FakeWidgetPreferencesRepository();
     final repository = FakeSetupRepository(
       profile: UserProfile(
         id: 1,
@@ -613,7 +1434,7 @@ void main() {
       QuantoPossoApp(
         setupRepository: repository,
         expenseRepository: FakeExpenseRepository(),
-        preferencesRepository: FakeWidgetPreferencesRepository(),
+        preferencesRepository: preferencesRepository,
       ),
     );
     await tester.pumpAndSettle();
@@ -622,13 +1443,56 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Configurações'), findsWidgets);
+    expect(
+      find.text('Personalize o aplicativo e gerencie seus dados.'),
+      findsOneWidget,
+    );
     expect(find.text('Perfil'), findsOneWidget);
+    expect(find.text('André'), findsOneWidget);
+    expect(find.textContaining('Renda mensal:'), findsOneWidget);
+    expect(find.textContaining('3.500,00'), findsOneWidget);
+    expect(find.text('Tema do aplicativo'), findsOneWidget);
     expect(find.text('Categorias'), findsWidgets);
-    expect(find.text('Privacidade'), findsOneWidget);
-    expect(find.text('Sistema'), findsOneWidget);
+    expect(find.text('Recorrências'), findsOneWidget);
+    expect(find.text('Assinaturas e compras parceladas'), findsOneWidget);
+    expect(find.text('Dados e privacidade'), findsOneWidget);
+    expect(find.text('Backup e dados'), findsOneWidget);
+    expect(find.text('Seus dados ficam neste dispositivo'), findsOneWidget);
+    expect(find.text('Quanto Posso'), findsOneWidget);
+    expect(find.text('Versão 1.0.0'), findsOneWidget);
+    expect(find.text('Sistema'), findsNothing);
     expect(find.text('Claro'), findsOneWidget);
     expect(find.text('Escuro'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Recorrências'));
+    await tester.tap(find.text('Recorrências'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Gerencie suas assinaturas e compras parceladas.'),
+      findsOneWidget,
+    );
+    expect(find.text('Nenhuma recorrência cadastrada.'), findsOneWidget);
+    Navigator.of(tester.element(find.byType(Scaffold).last)).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Escuro'));
+    await tester.tap(find.text('Escuro'));
+    await tester.pumpAndSettle();
+    expect(preferencesRepository.mode, ThemeMode.dark);
+    expect(
+      Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+      Brightness.dark,
+    );
+
+    await tester.tap(find.text('Claro'));
+    await tester.pumpAndSettle();
+    expect(preferencesRepository.mode, ThemeMode.light);
+    expect(
+      Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+      Brightness.light,
+    );
+
+    await tester.ensureVisible(find.text('André'));
     await tester.tap(find.text('André'));
     await tester.pumpAndSettle();
 
@@ -636,6 +1500,59 @@ void main() {
     final fields = tester.widgetList<TextFormField>(find.byType(TextFormField));
     expect(fields.elementAt(0).controller?.text, 'André');
     expect(fields.elementAt(1).controller?.text, '3.500,00');
+  });
+
+  testWidgets('Configurações permanecem responsivas em telas mobile', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    final now = DateTime(2026);
+
+    await tester.pumpWidget(
+      QuantoPossoApp(
+        setupRepository: FakeSetupRepository(
+          profile: UserProfile(
+            id: 1,
+            name: 'André da Silva com nome extenso',
+            monthlyIncome: 123456.78,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          categories: [
+            ExpenseCategory(
+              id: 'food',
+              name: 'Alimentação',
+              iconCodePoint: Icons.restaurant_rounded.codePoint,
+              iconFontFamily:
+                  Icons.restaurant_rounded.fontFamily ?? 'MaterialIcons',
+              colorValue: 0xFF1D1B4F,
+              isDefault: true,
+              createdAt: now,
+            ),
+          ],
+        ),
+        expenseRepository: FakeExpenseRepository(),
+        preferencesRepository: FakeWidgetPreferencesRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Configurações'));
+    await tester.pumpAndSettle();
+
+    const mobileSizes = [Size(360, 800), Size(412, 915), Size(411, 923)];
+    for (final size in mobileSizes) {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tema do aplicativo'), findsOneWidget);
+      expect(find.text('Lembrete diário'), findsOneWidget);
+      expect(find.text('Alerta de limite'), findsOneWidget);
+      expect(find.text('Categorias'), findsOneWidget);
+      expect(find.text('Backup e dados'), findsOneWidget);
+      expect(find.text('Quanto Posso'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'Falha no tamanho $size');
+    }
   });
 
   testWidgets('abre o gerenciamento e o formulário de categorias', (
@@ -712,7 +1629,7 @@ void main() {
     await tester.tap(find.byTooltip('Adicionar gasto'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.tap(find.text('Categoria'));
     await tester.pumpAndSettle();
     expect(find.text('Assinaturas'), findsOneWidget);
   });
@@ -770,6 +1687,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Notificações'), findsOneWidget);
+    expect(find.text('Recorrências'), findsOneWidget);
+    expect(find.text('Assinaturas e compras parceladas'), findsOneWidget);
     expect(find.text('Lembrete diário'), findsOneWidget);
     expect(find.text('Testar notificação'), findsOneWidget);
     expect(find.text('20:00'), findsOneWidget);
@@ -976,7 +1895,8 @@ void main() {
     await tester.tap(find.byTooltip('Editar gasto'));
     await tester.pumpAndSettle();
     expect(find.text('Editar gasto'), findsOneWidget);
-    expect(find.text('Valor'), findsOneWidget);
+    expect(find.text('Atualize o lançamento'), findsOneWidget);
+    expect(find.text('Valor do gasto'), findsOneWidget);
     expect(find.text('Categoria'), findsOneWidget);
     expect(find.text('Descri\u00e7\u00e3o opcional'), findsOneWidget);
     expect(find.text('Salvar altera\u00e7\u00f5es'), findsOneWidget);

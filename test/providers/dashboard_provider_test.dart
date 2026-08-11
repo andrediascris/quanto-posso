@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quanto_posso/models/daily_expense_total.dart';
+import 'package:quanto_posso/models/expense.dart';
+import 'package:quanto_posso/models/monthly_expense_summary.dart';
 import 'package:quanto_posso/providers/dashboard_provider.dart';
 import 'package:quanto_posso/repositories/expense_repository.dart';
 
@@ -46,6 +48,40 @@ class FakeDashboardExpenseRepository extends ExpenseRepository {
     if (throwOnLoad) throw StateError('Falha simulada');
     dailyLoadCount++;
     return List.of(dailyTotals);
+  }
+
+  @override
+  Future<List<MonthlyExpenseSummary>> getMonthlySummaries({
+    required DateTime startMonth,
+    required DateTime endMonth,
+  }) async {
+    if (throwOnLoad) throw StateError('Falha simulada');
+    final summaries = <MonthlyExpenseSummary>[];
+    for (final entry in totals.entries) {
+      final parts = entry.key.split('-');
+      final month = DateTime(int.parse(parts.first), int.parse(parts.last));
+      final start = DateTime(startMonth.year, startMonth.month);
+      final end = DateTime(endMonth.year, endMonth.month);
+      if (!month.isBefore(start) && !month.isAfter(end) && entry.value > 0) {
+        summaries.add(
+          MonthlyExpenseSummary(
+            month: month,
+            total: entry.value,
+            expenseCount: 1,
+          ),
+        );
+      }
+    }
+    return summaries;
+  }
+
+  @override
+  Future<Expense?> getHighestExpenseBetween({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    if (throwOnLoad) throw StateError('Falha simulada');
+    return null;
   }
 }
 

@@ -8,11 +8,13 @@ import 'package:quanto_posso/features/home/pages/home_page.dart';
 import 'package:quanto_posso/features/settings/pages/settings_page.dart';
 import 'package:quanto_posso/models/expense_category.dart';
 import 'package:quanto_posso/models/user_profile.dart';
+import 'package:quanto_posso/models/expense_type.dart';
 import 'package:quanto_posso/providers/expense_provider.dart';
 import 'package:quanto_posso/providers/dashboard_provider.dart';
 import 'package:quanto_posso/providers/history_provider.dart';
 import 'package:quanto_posso/providers/initial_setup_provider.dart';
 import 'package:quanto_posso/providers/budget_alert_provider.dart';
+import 'package:quanto_posso/providers/recurring_expense_provider.dart';
 import 'package:quanto_posso/shared/navigation/app_bottom_navigation.dart';
 
 class MainShellPage extends StatefulWidget {
@@ -106,6 +108,7 @@ class _MainShellPageState extends State<MainShellPage> {
                 profile: profile,
                 categories: categories,
                 onProfileUpdated: _evaluateBudgetAlert,
+                onAddExpense: _openAddExpense,
               ),
             ],
           ),
@@ -135,12 +138,12 @@ class _MainShellPageState extends State<MainShellPage> {
     );
   }
 
-  void _openAddExpense() {
+  Future<void> _openAddExpense() async {
     final expenseProvider = context.read<ExpenseProvider>();
     final historyProvider = context.read<HistoryProvider>();
     final dashboardProvider = context.read<DashboardProvider>();
 
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute<bool>(
         builder: (_) => AddExpensePage(
           categories: context.read<InitialSetupProvider>().categories,
@@ -163,9 +166,35 @@ class _MainShellPageState extends State<MainShellPage> {
                   await _evaluateBudgetAlert();
                 }
               },
+          onSaveRecurring:
+              ({
+                required ExpenseType type,
+                required amount,
+                required categoryId,
+                description,
+                required startDate,
+                totalOccurrences,
+              }) async {
+                await expenseProvider.addRecurringExpense(
+                  type: type,
+                  amount: amount,
+                  categoryId: categoryId,
+                  description: description,
+                  startDate: startDate,
+                  totalOccurrences: totalOccurrences,
+                );
+                if (mounted) {
+                  await historyProvider.loadHistory();
+                  await dashboardProvider.loadDashboard();
+                  await _evaluateBudgetAlert();
+                }
+              },
         ),
       ),
     );
+    if (mounted) {
+      await context.read<RecurringExpenseProvider>().reload();
+    }
   }
 
   Future<void> _evaluateBudgetAlert() async {

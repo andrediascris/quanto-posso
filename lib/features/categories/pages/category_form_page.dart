@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quanto_posso/core/utils/category_icon_utils.dart';
 import 'package:quanto_posso/app/theme/app_colors.dart';
 import 'package:quanto_posso/app/theme/app_radius.dart';
 import 'package:quanto_posso/app/theme/app_shadows.dart';
@@ -42,12 +43,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
     _nameController.addListener(_refreshPreview);
     _selectedIcon = category == null
         ? Icons.category_rounded
-        : IconData(
-            // ignore: non_const_argument_for_const_parameter
-            category.iconCodePoint,
-            // ignore: non_const_argument_for_const_parameter
-            fontFamily: category.iconFontFamily,
-          );
+        : CategoryIconUtils.resolve(category.iconCodePoint);
     _selectedColorValue = category?.colorValue ?? 0xFF1D1B4F;
   }
 

@@ -30,6 +30,10 @@ class AppTheme {
       onPrimary: AppColors.textLight,
 
       onSurface: AppColors.textPrimary,
+
+      onSurfaceVariant: AppColors.textSecondary,
+
+      outline: AppColors.border,
     ),
 
     // =====================================
@@ -127,30 +131,141 @@ class AppTheme {
 
     scaffoldBackgroundColor: AppColors.backgroundDark,
 
-    colorScheme: ColorScheme.dark(
-      primary: AppColors.accent,
-
-      secondary: AppColors.primary,
-
+    colorScheme: const ColorScheme.dark(
+      primary: AppColors.primaryDark,
+      onPrimary: AppColors.backgroundDark,
+      secondary: AppColors.accent,
+      onSecondary: AppColors.backgroundDark,
       surface: AppColors.surfaceDark,
-
+      onSurface: AppColors.textPrimaryDark,
       error: AppColors.error,
+      onError: AppColors.textPrimaryDark,
+      outline: AppColors.borderDark,
+      surfaceContainerLowest: AppColors.backgroundDark,
+      surfaceContainerLow: AppColors.surfaceDark,
+      surfaceContainer: AppColors.surfaceDark,
+      surfaceContainerHigh: AppColors.surfaceElevatedDark,
+      surfaceContainerHighest: AppColors.surfaceElevatedDark,
     ),
 
     textTheme: TextTheme(
-      displayLarge: AppTypography.display,
+      displayLarge: AppTypography.display.copyWith(
+        color: AppColors.textPrimaryDark,
+      ),
 
-      headlineLarge: AppTypography.h1,
+      headlineLarge: AppTypography.h1.copyWith(
+        color: AppColors.textPrimaryDark,
+      ),
 
-      headlineMedium: AppTypography.h2,
+      headlineMedium: AppTypography.h2.copyWith(
+        color: AppColors.textPrimaryDark,
+      ),
 
-      headlineSmall: AppTypography.h3,
+      headlineSmall: AppTypography.h3.copyWith(
+        color: AppColors.textPrimaryDark,
+      ),
 
-      bodyLarge: AppTypography.body,
+      bodyLarge: AppTypography.body.copyWith(color: AppColors.textPrimaryDark),
 
-      bodyMedium: AppTypography.bodyMedium,
+      bodyMedium: AppTypography.bodyMedium.copyWith(
+        color: AppColors.textPrimaryDark,
+      ),
 
-      bodySmall: AppTypography.caption,
+      bodySmall: AppTypography.caption.copyWith(
+        color: AppColors.textSecondaryDark,
+      ),
+    ),
+
+    cardTheme: CardThemeData(
+      color: AppColors.surfaceDark,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+    ),
+
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: AppColors.surfaceElevatedDark,
+      labelStyle: AppTypography.body.copyWith(
+        color: AppColors.textSecondaryDark,
+      ),
+      hintStyle: AppTypography.body.copyWith(
+        color: AppColors.textSecondaryDark,
+      ),
+      prefixIconColor: AppColors.iconDark,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        borderSide: const BorderSide(color: AppColors.borderDark),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        borderSide: const BorderSide(color: AppColors.borderDark),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        borderSide: const BorderSide(color: AppColors.primaryDark),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        borderSide: const BorderSide(color: AppColors.error),
+      ),
+    ),
+
+    iconTheme: const IconThemeData(color: AppColors.iconDark),
+    dividerTheme: const DividerThemeData(color: AppColors.borderDark),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: AppColors.surfaceElevatedDark,
+    ),
+    dialogTheme: const DialogThemeData(
+      backgroundColor: AppColors.surfaceElevatedDark,
+    ),
+    appBarTheme: const AppBarTheme(
+      elevation: 0,
+      backgroundColor: AppColors.backgroundDark,
+      foregroundColor: AppColors.textPrimaryDark,
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? AppColors.backgroundDark
+            : AppColors.textSecondaryDark,
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? AppColors.accent
+            : AppColors.surfaceElevatedDark,
+      ),
+      trackOutlineColor: const WidgetStatePropertyAll(AppColors.borderDark),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? AppColors.primaryDark
+              : AppColors.textSecondaryDark,
+        ),
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? AppColors.primaryDark.withValues(alpha: 0.18)
+              : AppColors.surfaceDark,
+        ),
+        side: const WidgetStatePropertyAll(
+          BorderSide(color: AppColors.borderDark),
+        ),
+      ),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: AppColors.surfaceElevatedDark,
+      selectedColor: AppColors.primaryDark.withValues(alpha: 0.18),
+      checkmarkColor: AppColors.primaryDark,
+      labelStyle: AppTypography.caption.copyWith(
+        color: AppColors.textPrimaryDark,
+      ),
+      side: const BorderSide(color: AppColors.borderDark),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.circular),
+      ),
     ),
   );
 }

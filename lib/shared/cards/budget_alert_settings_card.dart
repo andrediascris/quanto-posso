@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:quanto_posso/app/theme/app_colors.dart';
 import 'package:quanto_posso/app/theme/app_radius.dart';
 import 'package:quanto_posso/app/theme/app_shadows.dart';
 import 'package:quanto_posso/app/theme/app_spacing.dart';
@@ -13,6 +12,7 @@ class BudgetAlertSettingsCard extends StatelessWidget {
     required this.isLoading,
     required this.onEnabledChanged,
     required this.onThresholdChanged,
+    this.embedded = false,
   });
 
   final bool enabled;
@@ -20,15 +20,19 @@ class BudgetAlertSettingsCard extends StatelessWidget {
   final bool isLoading;
   final ValueChanged<bool> onEnabledChanged;
   final ValueChanged<int> onThresholdChanged;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(AppRadius.card);
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
+        color: embedded
+            ? colorScheme.surface.withValues(alpha: 0)
+            : colorScheme.surface,
         borderRadius: radius,
-        boxShadow: const [AppShadows.card],
+        boxShadow: embedded ? AppShadows.none : const [AppShadows.card],
       ),
       child: Material(
         type: MaterialType.transparency,
@@ -40,9 +44,9 @@ class BudgetAlertSettingsCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.account_balance_wallet_outlined,
-                    color: AppColors.primary,
+                    color: colorScheme.primary,
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
@@ -52,7 +56,7 @@ class BudgetAlertSettingsCard extends StatelessWidget {
                         Text(
                           'Alerta de limite',
                           style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.textPrimary,
+                            color: colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xxs),
@@ -60,16 +64,20 @@ class BudgetAlertSettingsCard extends StatelessWidget {
                           'Receba um aviso quando seus gastos se aproximarem '
                           'da sua renda.',
                           style: AppTypography.caption.copyWith(
-                            color: AppColors.textSecondary,
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  Switch(
-                    value: enabled,
-                    onChanged: isLoading ? null : onEnabledChanged,
+                  Semantics(
+                    label: 'Ativar alerta de limite',
+                    toggled: enabled,
+                    child: Switch(
+                      value: enabled,
+                      onChanged: isLoading ? null : onEnabledChanged,
+                    ),
                   ),
                 ],
               ),
@@ -96,7 +104,7 @@ class BudgetAlertSettingsCard extends StatelessWidget {
                 'Você será avisado ao atingir $thresholdPercentage% e '
                 'novamente ao atingir 100%.',
                 style: AppTypography.caption.copyWith(
-                  color: AppColors.textSecondary,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ],

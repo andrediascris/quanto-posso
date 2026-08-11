@@ -1,8 +1,40 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quanto_posso/models/expense.dart';
+import 'package:quanto_posso/models/expense_type.dart';
+import 'package:quanto_posso/models/recurring_expense_plan.dart';
 import 'package:quanto_posso/providers/expense_provider.dart';
 import 'package:quanto_posso/providers/history_provider.dart';
 import 'package:quanto_posso/repositories/expense_repository.dart';
+import 'package:quanto_posso/repositories/recurring_expense_repository.dart';
+
+class FakeRecurringEditRepository extends RecurringExpenseRepository {
+  FakeRecurringEditRepository(this.plan);
+
+  RecurringExpensePlan plan;
+  int updateCalls = 0;
+  Expense? updatedExpense;
+  double? updatedAmount;
+  DateTime? updatedNextBillingDate;
+
+  @override
+  Future<RecurringExpensePlan?> getPlanById(int planId) async =>
+      plan.id == planId ? plan : null;
+
+  @override
+  Future<void> updateExpenseAndFuture({
+    required Expense expense,
+    required double amount,
+    required String categoryId,
+    String? description,
+    required DateTime nextBillingDate,
+    DateTime? now,
+  }) async {
+    updateCalls++;
+    updatedExpense = expense;
+    updatedAmount = amount;
+    updatedNextBillingDate = nextBillingDate;
+  }
+}
 
 class FakeEditExpenseRepository extends ExpenseRepository {
   FakeEditExpenseRepository({List<Expense> expenses = const []})
@@ -48,6 +80,10 @@ Expense expense({
   DateTime? occurredAt,
   DateTime? createdAt,
   DateTime? updatedAt,
+  int? recurringPlanId,
+  int? occurrenceNumber,
+  int? occurrenceTotal,
+  ExpenseType? recurringType,
 }) {
   final date = DateTime(2026, 8, 1);
   return Expense(
@@ -58,6 +94,26 @@ Expense expense({
     occurredAt: occurredAt ?? date,
     createdAt: createdAt ?? date,
     updatedAt: updatedAt ?? date,
+    recurringPlanId: recurringPlanId,
+    occurrenceNumber: occurrenceNumber,
+    occurrenceTotal: occurrenceTotal,
+    recurringType: recurringType,
+  );
+}
+
+RecurringExpensePlan recurringPlan() {
+  final date = DateTime(2026, 1, 10);
+  return RecurringExpensePlan(
+    id: 12,
+    type: ExpenseType.subscription,
+    categoryId: 'food',
+    description: 'Plano antigo',
+    amount: 29.9,
+    startDate: date,
+    billingDay: date.day,
+    generatedOccurrences: 3,
+    createdAt: date,
+    updatedAt: date,
   );
 }
 
@@ -181,4 +237,60 @@ void main() {
     expect(provider.searchQuery, 'mercado');
     expect(provider.filteredExpenses, isEmpty);
   });
+
+  test('edição individual não modifica o plano recorrente', () async {
+    final original = expense(
+      recurringPlanId: 12,
+      occurrenceNumber: 2,
+      recurringType: ExpenseType.subscription,
+    );
+    final expenseRepository = FakeEditExpenseRepository(expenses: [original]);
+    final recurringRepository = FakeRecurringEditRepository(recurringPlan());
+    final provider = ExpenseProvider(
+      repository: expenseRepository,
+      recurringRepository: recurringRepository,
+    );
+
+    await provider.updateExpense(
+      expense: original,
+      amount: 35,
+      categoryId: 'services',
+      occurredAt: original.occurredAt,
+    );
+
+    expect(expenseRepository.updatedExpense?.recurringPlanId, 12);
+    expect(recurringRepository.updateCalls, 0);
+  });
+
+  test(
+    'edição futura preserva vínculo e executa uma única atualização',
+    () async {
+      final original = expense(
+        recurringPlanId: 12,
+        occurrenceNumber: 3,
+        recurringType: ExpenseType.subscription,
+      );
+      final expenseRepository = FakeEditExpenseRepository(expenses: [original]);
+      final recurringRepository = FakeRecurringEditRepository(recurringPlan());
+      final provider = ExpenseProvider(
+        repository: expenseRepository,
+        recurringRepository: recurringRepository,
+      );
+      final nextBillingDate = DateTime(2026, 4, 15);
+
+      await provider.updateRecurringExpenseAndFuture(
+        expense: original,
+        amount: 39.9,
+        categoryId: 'services',
+        description: 'Plano novo',
+        nextBillingDate: nextBillingDate,
+      );
+
+      expect(recurringRepository.updateCalls, 1);
+      expect(recurringRepository.updatedExpense, same(original));
+      expect(recurringRepository.updatedExpense?.recurringPlanId, 12);
+      expect(recurringRepository.updatedNextBillingDate, nextBillingDate);
+      expect(expenseRepository.expenses, hasLength(1));
+    },
+  );
 }

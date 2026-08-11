@@ -20,97 +20,68 @@ class CategoryPieChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final entries =
         totalsByCategory.entries.where((entry) => entry.value > 0).toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
+          ..sort((first, second) => second.value.compareTo(first.value));
+    final visibleEntries = entries.take(8).toList(growable: false);
 
-    if (entries.isEmpty) {
+    if (visibleEntries.isEmpty) {
       return Column(
         children: [
-          const Icon(Icons.pie_chart_outline_rounded, color: AppColors.primary),
+          Icon(
+            Icons.pie_chart_outline_rounded,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Nenhum gasto neste mês.',
-            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+            style: AppTypography.body.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       );
     }
 
-    final total = entries.fold<double>(0, (sum, entry) => sum + entry.value);
-
+    final total = visibleEntries.fold<double>(
+      0,
+      (sum, entry) => sum + entry.value,
+    );
     return Semantics(
       label:
           'Gráfico de gastos por categoria. '
-          '${entries.length} categorias, total ${CurrencyUtils.format(total)}.',
-      child: Column(
-        children: [
-          SizedBox(
-            height: AppSpacing.xxxl * 5,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                PieChart(
-                  PieChartData(
-                    centerSpaceRadius: AppSpacing.xl,
-                    sectionsSpace: AppSpacing.xxs,
-                    sections: [
-                      for (var index = 0; index < entries.length; index++)
-                        PieChartSectionData(
-                          value: entries[index].value,
-                          color: _categoryColor(entries[index].key),
-                          radius: AppSpacing.xl,
-                          title: entries[index].value / total >= 0.08
-                              ? '${(entries[index].value / total * 100).round()}%'
-                              : '',
-                          titleStyle: AppTypography.small.copyWith(
-                            color: AppColors.textLight,
-                          ),
-                        ),
-                    ],
-                  ),
+          '${visibleEntries.length} categorias, '
+          'total ${CurrencyUtils.format(total)}.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: 42,
+                child: _CategoryDonut(
+                  entries: visibleEntries,
+                  colorFor: _categoryColor,
                 ),
-                Text(
-                  'Categorias',
-                  style: AppTypography.small.copyWith(color: AppColors.primary),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                flex: 58,
+                child: _CategoryLegend(
+                  entries: visibleEntries,
+                  total: total,
+                  nameFor: _categoryName,
+                  colorFor: _categoryColor,
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          for (var index = 0; index < entries.length; index++) ...[
-            Row(
-              children: [
-                Icon(Icons.circle, color: _categoryColor(entries[index].key)),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    _categoryName(entries[index].key),
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                Text(
-                  '${CurrencyUtils.format(entries[index].value)} · '
-                  '${(entries[index].value / total * 100).toStringAsFixed(1)}%',
-                  style: AppTypography.small.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-            if (index < entries.length - 1)
-              const SizedBox(height: AppSpacing.sm),
-          ],
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   String _categoryName(String id) {
     for (final category in categories) {
-      if (category.id == id) {
-        return category.name;
-      }
+      if (category.id == id) return category.name;
     }
     return 'Outros';
   }
@@ -124,5 +95,110 @@ class CategoryPieChart extends StatelessWidget {
       }
     }
     return AppColors.primary;
+  }
+}
+
+class _CategoryDonut extends StatelessWidget {
+  const _CategoryDonut({required this.entries, required this.colorFor});
+
+  final List<MapEntry<String, double>> entries;
+  final Color Function(String id) colorFor;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final chartSize = constraints.constrainWidth(AppSpacing.xxl * 5);
+        return Center(
+          child: SizedBox(
+            width: chartSize,
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: PieChart(
+                PieChartData(
+                  centerSpaceRadius: chartSize / 5,
+                  sectionsSpace: AppSpacing.xxs,
+                  sections: [
+                    for (final entry in entries)
+                      PieChartSectionData(
+                        value: entry.value,
+                        color: colorFor(entry.key),
+                        radius: chartSize / 4,
+                        showTitle: false,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CategoryLegend extends StatelessWidget {
+  const _CategoryLegend({
+    required this.entries,
+    required this.total,
+    required this.nameFor,
+    required this.colorFor,
+  });
+
+  final List<MapEntry<String, double>> entries;
+  final double total;
+  final String Function(String id) nameFor;
+  final Color Function(String id) colorFor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var index = 0; index < entries.length; index++) ...[
+          Row(
+            children: [
+              Icon(
+                Icons.circle,
+                size: AppSpacing.xs,
+                color: colorFor(entries[index].key),
+              ),
+              const SizedBox(width: AppSpacing.xxs),
+              Expanded(
+                child: Text(
+                  nameFor(entries[index].key),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.small.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xxs),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    CurrencyUtils.format(entries[index].value),
+                    maxLines: 1,
+                    style: AppTypography.small.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xxs),
+              Text(
+                '${(entries[index].value / total * 100).round()}%',
+                style: AppTypography.small.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          if (index < entries.length - 1) const SizedBox(height: AppSpacing.xs),
+        ],
+      ],
+    );
   }
 }
