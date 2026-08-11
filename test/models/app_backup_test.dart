@@ -26,6 +26,7 @@ void main() {
       'profile',
       'categories',
       'expenses',
+      'recurring_expense_plans',
       'preferences',
     });
     expect(json['profile'], containsPair('name', 'Andr\u00e9'));
@@ -46,6 +47,14 @@ void main() {
     expect(restored.appName, 'Quanto Posso');
     expect(restored.exportedAt, exportedAt);
     expect(restored.categories, hasLength(1));
+    expect(restored.recurringPlans, isEmpty);
+  });
+
+  test('backup v1 sem recorrencias permanece compativel', () {
+    final json = createBackup().toJson()..remove('recurring_expense_plans');
+    final restored = AppBackup.fromJson(json);
+    expect(restored.backupVersion, 1);
+    expect(restored.recurringPlans, isEmpty);
   });
 
   test('backup_version ausente lan\u00e7a FormatException', () {

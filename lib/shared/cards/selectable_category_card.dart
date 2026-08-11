@@ -21,12 +21,13 @@ class SelectableCategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final borderRadius = BorderRadius.circular(AppRadius.card);
     final backgroundColor = isSelected
-        ? AppColors.primary
-        : AppColors.surfaceLight;
-    final iconColor = isSelected ? AppColors.accent : AppColors.primary;
-    final textColor = isSelected ? AppColors.textLight : AppColors.textPrimary;
+        ? colorScheme.primary.withValues(alpha: 0.16)
+        : colorScheme.surfaceContainer;
+    final iconColor = isSelected ? AppColors.accent : colorScheme.primary;
+    final textColor = colorScheme.onSurface;
 
     return Semantics(
       button: true,
@@ -36,7 +37,9 @@ class SelectableCategoryCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: borderRadius,
-          border: isSelected ? null : Border.all(color: AppColors.border),
+          border: Border.all(
+            color: isSelected ? AppColors.accent : colorScheme.outline,
+          ),
           boxShadow: isSelected ? const [AppShadows.card] : AppShadows.none,
         ),
         child: Material(

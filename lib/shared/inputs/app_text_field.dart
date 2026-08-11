@@ -39,10 +39,14 @@ class AppTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.brightness == Brightness.dark;
     final borderRadius = BorderRadius.circular(AppRadius.medium);
     final defaultBorder = OutlineInputBorder(
       borderRadius: borderRadius,
-      borderSide: const BorderSide(color: AppColors.border),
+      borderSide: BorderSide(
+        color: isDark ? colorScheme.outline : AppColors.border,
+      ),
     );
     final errorBorder = OutlineInputBorder(
       borderRadius: borderRadius,
@@ -59,18 +63,40 @@ class AppTextField extends StatelessWidget {
       onFieldSubmitted: onFieldSubmitted,
       obscureText: obscureText,
       enabled: enabled,
-      style: AppTypography.body.copyWith(color: AppColors.textPrimary),
+      style: AppTypography.body.copyWith(
+        color: isDark ? colorScheme.onSurface : AppColors.textPrimary,
+      ),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: prefixIcon == null
             ? null
-            : Icon(prefixIcon, color: AppColors.primary),
+            : Icon(
+                prefixIcon,
+                color: isDark
+                    ? colorScheme.onSurfaceVariant
+                    : AppColors.primary,
+              ),
         prefixText: prefixText,
         contentPadding: const EdgeInsets.all(AppSpacing.md),
-        labelStyle: AppTypography.body.copyWith(color: AppColors.textPrimary),
-        hintStyle: AppTypography.body.copyWith(color: AppColors.textSecondary),
-        prefixStyle: AppTypography.body.copyWith(color: AppColors.textPrimary),
+        labelStyle: AppTypography.body.copyWith(
+          color: isDark ? colorScheme.onSurfaceVariant : AppColors.textPrimary,
+        ),
+        hintStyle: AppTypography.body.copyWith(
+          color: isDark
+              ? colorScheme.onSurfaceVariant
+              : AppColors.textSecondary,
+        ),
+        prefixStyle: AppTypography.body.copyWith(
+          color: isDark ? colorScheme.onSurface : AppColors.textPrimary,
+        ),
+        fillColor: isDark ? colorScheme.surfaceContainerHigh : null,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: borderRadius,
+          borderSide: BorderSide(
+            color: isDark ? colorScheme.primary : AppColors.primary,
+          ),
+        ),
         border: defaultBorder,
         enabledBorder: defaultBorder,
         errorBorder: errorBorder,

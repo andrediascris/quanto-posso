@@ -10,6 +10,8 @@ import 'package:quanto_posso/models/backup_import_preview.dart';
 import 'package:quanto_posso/models/expense.dart';
 import 'package:quanto_posso/models/expense_category.dart';
 import 'package:quanto_posso/models/user_profile.dart';
+import 'package:quanto_posso/models/recurring_expense_plan.dart';
+import 'package:quanto_posso/repositories/recurring_expense_repository.dart';
 import 'package:quanto_posso/repositories/expense_repository.dart';
 import 'package:quanto_posso/repositories/preferences_repository.dart';
 import 'package:quanto_posso/repositories/setup_repository.dart';
@@ -86,10 +88,12 @@ class LocalBackupDatabaseRestoreService
 
   static const operationOrder = [
     'delete expenses',
+    'delete recurring plans',
     'delete categories',
     'delete profiles',
     'insert profile',
     'insert categories',
+    'insert recurring plans',
     'insert expenses',
   ];
 
@@ -98,6 +102,7 @@ class LocalBackupDatabaseRestoreService
     final database = await _database.database;
     await database.transaction((transaction) async {
       await transaction.delete('expenses');
+      await transaction.delete('recurring_expense_plans');
       await transaction.delete('categories');
       await transaction.delete('profiles');
 
@@ -113,6 +118,15 @@ class LocalBackupDatabaseRestoreService
         );
       }
       await categoryBatch.commit(noResult: true);
+
+      final planBatch = transaction.batch();
+      for (final map in backup.recurringPlans) {
+        planBatch.insert(
+          'recurring_expense_plans',
+          RecurringExpensePlan.fromMap(map).toMap(),
+        );
+      }
+      await planBatch.commit(noResult: true);
 
       final expenseBatch = transaction.batch();
       for (final map in backup.expenses) {
@@ -185,6 +199,7 @@ class BackupRepository {
     BackupFileService? fileService,
     BackupPickerService? pickerService,
     BackupDatabaseRestoreService? databaseRestoreService,
+    RecurringExpenseRepository? recurringExpenseRepository,
   }) : _setupRepository = setupRepository ?? SetupRepository(),
        _expenseRepository = expenseRepository ?? ExpenseRepository(),
        _preferencesRepository =
@@ -192,7 +207,10 @@ class BackupRepository {
        _fileService = fileService ?? LocalBackupFileService(),
        _pickerService = pickerService ?? LocalBackupPickerService(),
        _databaseRestoreService =
-           databaseRestoreService ?? LocalBackupDatabaseRestoreService();
+           databaseRestoreService ?? LocalBackupDatabaseRestoreService(),
+       _recurringExpenseRepository =
+           recurringExpenseRepository ??
+           (expenseRepository == null ? RecurringExpenseRepository() : null);
 
   final SetupRepository _setupRepository;
   final ExpenseRepository _expenseRepository;
@@ -200,6 +218,7 @@ class BackupRepository {
   final BackupFileService _fileService;
   final BackupPickerService _pickerService;
   final BackupDatabaseRestoreService _databaseRestoreService;
+  final RecurringExpenseRepository? _recurringExpenseRepository;
 
   static const _maximumBackupBytes = 10 * 1024 * 1024;
 
@@ -211,9 +230,11 @@ class BackupRepository {
     final categories = await _setupRepository.getCategories();
     final expenses = await _expenseRepository.getAllExpenses();
     final preferences = await _preferencesRepository.exportPreferences();
+    final recurringPlans =
+        await _recurringExpenseRepository?.getPlans() ?? const [];
 
     return AppBackup(
-      backupVersion: 1,
+      backupVersion: 3,
       appName: 'Quanto Posso',
       exportedAt: DateTime.now(),
       profile: profile.toMap(),
@@ -222,6 +243,9 @@ class BackupRepository {
           .toList(growable: false),
       expenses: expenses.map((item) => item.toMap()).toList(growable: false),
       preferences: preferences,
+      recurringPlans: recurringPlans
+          .map((plan) => plan.toMap())
+          .toList(growable: false),
     );
   }
 
@@ -318,7 +342,7 @@ class BackupRepository {
   }
 
   void _validateBackup(AppBackup backup) {
-    if (backup.backupVersion != 1) {
+    if (backup.backupVersion < 1 || backup.backupVersion > 3) {
       throw const FormatException('Vers\u00e3o de backup n\u00e3o suportada.');
     }
     if (backup.appName != 'Quanto Posso') {
@@ -337,8 +361,15 @@ class BackupRepository {
         'O backup n\u00e3o possui categorias v\u00e1lidas.',
       );
     }
-    if (!_hasValidExpenses(backup.expenses, backup.categories)) {
+    if (!_hasValidExpenses(
+      backup.expenses,
+      backup.categories,
+      backup.recurringPlans,
+    )) {
       throw const FormatException('O backup possui gastos inv\u00e1lidos.');
+    }
+    if (!_hasValidRecurringPlans(backup.recurringPlans, backup.categories)) {
+      throw const FormatException('O backup possui recorrências inválidas.');
     }
     try {
       _preferencesRepository.validateImportPreferences(backup.preferences);
@@ -387,12 +418,22 @@ class BackupRepository {
   bool _hasValidExpenses(
     List<Map<String, Object?>> expenses,
     List<Map<String, Object?>> categories,
+    List<Map<String, Object?>> plans,
   ) {
     final categoryIds = categories.map((item) => item['id']).toSet();
+    final planIds = plans.map((item) => item['id']).toSet();
     final expenseIds = <int>{};
+    final occurrences = <String>{};
     for (final expense in expenses) {
       final id = expense['id'];
       final amount = expense['amount'];
+      final recurringPlanId = expense['recurring_plan_id'];
+      final occurrenceNumber = expense['occurrence_number'];
+      final occurrenceTotal = expense['occurrence_total'];
+      final recurringType = expense['recurring_type'];
+      final occurrenceKey = recurringPlanId == null
+          ? null
+          : '$recurringPlanId:$occurrenceNumber';
       if ((id != null && (id is! int || !expenseIds.add(id))) ||
           amount is! num ||
           amount <= 0 ||
@@ -401,7 +442,64 @@ class BackupRepository {
               expense['description'] is! String) ||
           !_isDate(expense['occurred_at']) ||
           !_isDate(expense['created_at']) ||
-          !_isDate(expense['updated_at'])) {
+          !_isDate(expense['updated_at']) ||
+          (recurringPlanId == null &&
+              (occurrenceNumber != null ||
+                  occurrenceTotal != null ||
+                  recurringType != null)) ||
+          (recurringPlanId != null &&
+              (recurringPlanId is! int ||
+                  !planIds.contains(recurringPlanId) ||
+                  occurrenceNumber is! int ||
+                  occurrenceNumber <= 0 ||
+                  (occurrenceTotal != null &&
+                      (occurrenceTotal is! int || occurrenceTotal <= 0)) ||
+                  (recurringType != 'subscription' &&
+                      recurringType != 'installment') ||
+                  !occurrences.add(occurrenceKey!)))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _hasValidRecurringPlans(
+    List<Map<String, Object?>> plans,
+    List<Map<String, Object?>> categories,
+  ) {
+    final categoryIds = categories.map((item) => item['id']).toSet();
+    final ids = <int>{};
+    for (final plan in plans) {
+      final id = plan['id'];
+      final type = plan['type'];
+      final total = plan['total_occurrences'];
+      final generated = plan['generated_occurrences'];
+      final isActive = plan['is_active'];
+      final status = plan['status'];
+      if (id is! int ||
+          !ids.add(id) ||
+          (type != 'subscription' && type != 'installment') ||
+          !categoryIds.contains(plan['category_id']) ||
+          (plan['description'] != null && plan['description'] is! String) ||
+          plan['amount'] is! num ||
+          (plan['amount'] as num) <= 0 ||
+          plan['billing_day'] is! int ||
+          (plan['billing_day'] as int) < 1 ||
+          (plan['billing_day'] as int) > 31 ||
+          (total != null && (total is! int || total <= 0)) ||
+          generated is! int ||
+          generated < 0 ||
+          isActive is! int ||
+          (isActive != 0 && isActive != 1) ||
+          (status != null &&
+              status != 'active' &&
+              status != 'completed' &&
+              status != 'cancelled') ||
+          (status == 'active' && isActive != 1) ||
+          ((status == 'completed' || status == 'cancelled') && isActive != 0) ||
+          !_isDate(plan['start_date']) ||
+          !_isDate(plan['created_at']) ||
+          !_isDate(plan['updated_at'])) {
         return false;
       }
     }

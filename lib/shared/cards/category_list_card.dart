@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quanto_posso/core/utils/category_icon_utils.dart';
 import 'package:quanto_posso/app/theme/app_colors.dart';
 import 'package:quanto_posso/app/theme/app_radius.dart';
 import 'package:quanto_posso/app/theme/app_shadows.dart';
@@ -20,12 +21,7 @@ class CategoryListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = IconData(
-      // ignore: non_const_argument_for_const_parameter
-      category.iconCodePoint,
-      // ignore: non_const_argument_for_const_parameter
-      fontFamily: category.iconFontFamily,
-    );
+    final icon = CategoryIconUtils.resolve(category.iconCodePoint);
     final categoryColor =
         category.colorValue >= 0 && category.colorValue <= 0xFFFFFFFF
         ? Color(category.colorValue)

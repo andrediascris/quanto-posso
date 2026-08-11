@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:quanto_posso/app/theme/app_colors.dart';
 import 'package:quanto_posso/app/theme/app_radius.dart';
 import 'package:quanto_posso/app/theme/app_shadows.dart';
 import 'package:quanto_posso/app/theme/app_spacing.dart';
@@ -14,6 +13,7 @@ class ReminderSettingsCard extends StatelessWidget {
     required this.onEnabledChanged,
     required this.onTimeTap,
     required this.onTestTap,
+    this.embedded = false,
   });
 
   final bool enabled;
@@ -22,15 +22,19 @@ class ReminderSettingsCard extends StatelessWidget {
   final ValueChanged<bool> onEnabledChanged;
   final VoidCallback onTimeTap;
   final VoidCallback onTestTap;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(AppRadius.card);
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
+        color: embedded
+            ? colorScheme.surface.withValues(alpha: 0)
+            : colorScheme.surface,
         borderRadius: radius,
-        boxShadow: const [AppShadows.card],
+        boxShadow: embedded ? AppShadows.none : const [AppShadows.card],
       ),
       child: Material(
         type: MaterialType.transparency,
@@ -42,9 +46,9 @@ class ReminderSettingsCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.notifications_active_outlined,
-                    color: AppColors.primary,
+                    color: colorScheme.primary,
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
@@ -54,23 +58,27 @@ class ReminderSettingsCard extends StatelessWidget {
                         Text(
                           'Lembrete diário',
                           style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.textPrimary,
+                            color: colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xxs),
                         Text(
                           'Receba um aviso para registrar os gastos do dia.',
                           style: AppTypography.caption.copyWith(
-                            color: AppColors.textSecondary,
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  Switch(
-                    value: enabled,
-                    onChanged: isLoading ? null : onEnabledChanged,
+                  Semantics(
+                    label: 'Ativar lembrete diário',
+                    toggled: enabled,
+                    child: Switch(
+                      value: enabled,
+                      onChanged: isLoading ? null : onEnabledChanged,
+                    ),
                   ),
                 ],
               ),
@@ -82,10 +90,7 @@ class ReminderSettingsCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.schedule_rounded,
-                        color: AppColors.primary,
-                      ),
+                      Icon(Icons.schedule_rounded, color: colorScheme.primary),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
@@ -93,7 +98,7 @@ class ReminderSettingsCard extends StatelessWidget {
                             context,
                           ).formatTimeOfDay(time, alwaysUse24HourFormat: true),
                           style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.textPrimary,
+                            color: colorScheme.onSurface,
                           ),
                         ),
                       ),

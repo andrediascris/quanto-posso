@@ -1,3 +1,5 @@
+import 'package:quanto_posso/models/expense_type.dart';
+
 class Expense {
   const Expense({
     this.id,
@@ -7,6 +9,10 @@ class Expense {
     required this.occurredAt,
     required this.createdAt,
     required this.updatedAt,
+    this.recurringPlanId,
+    this.occurrenceNumber,
+    this.occurrenceTotal,
+    this.recurringType,
   });
 
   final int? id;
@@ -16,6 +22,10 @@ class Expense {
   final DateTime occurredAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int? recurringPlanId;
+  final int? occurrenceNumber;
+  final int? occurrenceTotal;
+  final ExpenseType? recurringType;
 
   Expense copyWith({
     int? id,
@@ -26,6 +36,10 @@ class Expense {
     DateTime? occurredAt,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? recurringPlanId,
+    int? occurrenceNumber,
+    int? occurrenceTotal,
+    ExpenseType? recurringType,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -35,6 +49,10 @@ class Expense {
       occurredAt: occurredAt ?? this.occurredAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      recurringPlanId: recurringPlanId ?? this.recurringPlanId,
+      occurrenceNumber: occurrenceNumber ?? this.occurrenceNumber,
+      occurrenceTotal: occurrenceTotal ?? this.occurrenceTotal,
+      recurringType: recurringType ?? this.recurringType,
     );
   }
 
@@ -47,6 +65,10 @@ class Expense {
       'occurred_at': occurredAt.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'recurring_plan_id': recurringPlanId,
+      'occurrence_number': occurrenceNumber,
+      'occurrence_total': occurrenceTotal,
+      'recurring_type': recurringType?.storageValue,
     };
   }
 
@@ -59,6 +81,12 @@ class Expense {
       occurredAt: DateTime.parse(map['occurred_at'] as String),
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
+      recurringPlanId: map['recurring_plan_id'] as int?,
+      occurrenceNumber: map['occurrence_number'] as int?,
+      occurrenceTotal: map['occurrence_total'] as int?,
+      recurringType: map['recurring_type'] == null
+          ? null
+          : ExpenseType.fromStorage(map['recurring_type'] as String?),
     );
   }
 }

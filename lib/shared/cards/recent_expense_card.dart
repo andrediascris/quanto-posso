@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quanto_posso/core/utils/category_icon_utils.dart';
 import 'package:intl/intl.dart';
 import 'package:quanto_posso/app/theme/app_colors.dart';
 import 'package:quanto_posso/app/theme/app_radius.dart';
@@ -25,18 +26,13 @@ class RecentExpenseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // O ícone é reconstruído a partir dos metadados persistidos da categoria.
-    final icon = IconData(
-      // ignore: non_const_argument_for_const_parameter
-      category.iconCodePoint,
-      // ignore: non_const_argument_for_const_parameter
-      fontFamily: category.iconFontFamily,
-    );
+    final colorScheme = Theme.of(context).colorScheme;
+    final icon = CategoryIconUtils.resolve(category.iconCodePoint);
     final date = DateFormat('dd/MM/yyyy').format(expense.occurredAt);
     final categoryColor =
         category.colorValue >= 0 && category.colorValue <= 0xFFFFFFFF
         ? Color(category.colorValue)
-        : AppColors.primary;
+        : colorScheme.primary;
     final amount = CurrencyUtils.format(expense.amount);
     final description = expense.description?.trim();
 
@@ -51,7 +47,7 @@ class RecentExpenseCard extends StatelessWidget {
               Text(
                 category.name,
                 style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
+                  color: colorScheme.onSurface,
                 ),
               ),
               if (description != null && description.isNotEmpty) ...[
@@ -59,7 +55,7 @@ class RecentExpenseCard extends StatelessWidget {
                 Text(
                   description,
                   style: AppTypography.caption.copyWith(
-                    color: AppColors.textSecondary,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -67,7 +63,7 @@ class RecentExpenseCard extends StatelessWidget {
               Text(
                 date,
                 style: AppTypography.small.copyWith(
-                  color: AppColors.textSecondary,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -86,7 +82,7 @@ class RecentExpenseCard extends StatelessWidget {
             child: IconButton(
               tooltip: 'Editar gasto',
               onPressed: onTap,
-              color: AppColors.primary,
+              color: colorScheme.primary,
               visualDensity: VisualDensity.compact,
               icon: const Icon(Icons.edit_outlined),
             ),
@@ -114,7 +110,7 @@ class RecentExpenseCard extends StatelessWidget {
       label: onTap == null ? null : 'Editar gasto de ${category.name}',
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surfaceLight,
+          color: colorScheme.surface,
           borderRadius: radius,
           boxShadow: const [AppShadows.card],
         ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:quanto_posso/app/theme/app_colors.dart';
 import 'package:quanto_posso/features/dashboard/pages/dashboard_page.dart';
 import 'package:quanto_posso/features/expenses/pages/add_expense_page.dart';
 import 'package:quanto_posso/features/history/pages/history_page.dart';
@@ -8,11 +7,13 @@ import 'package:quanto_posso/features/home/pages/home_page.dart';
 import 'package:quanto_posso/features/settings/pages/settings_page.dart';
 import 'package:quanto_posso/models/expense_category.dart';
 import 'package:quanto_posso/models/user_profile.dart';
+import 'package:quanto_posso/models/expense_type.dart';
 import 'package:quanto_posso/providers/expense_provider.dart';
 import 'package:quanto_posso/providers/dashboard_provider.dart';
 import 'package:quanto_posso/providers/history_provider.dart';
 import 'package:quanto_posso/providers/initial_setup_provider.dart';
 import 'package:quanto_posso/providers/budget_alert_provider.dart';
+import 'package:quanto_posso/providers/recurring_expense_provider.dart';
 import 'package:quanto_posso/shared/navigation/app_bottom_navigation.dart';
 
 class MainShellPage extends StatefulWidget {
@@ -106,11 +107,13 @@ class _MainShellPageState extends State<MainShellPage> {
                 profile: profile,
                 categories: categories,
                 onProfileUpdated: _evaluateBudgetAlert,
+                onAddExpense: _openAddExpense,
               ),
             ],
           ),
           bottomNavigationBar: AppBottomNavigation(
             currentIndex: _currentIndex,
+            onAddExpense: _openAddExpense,
             onDestinationSelected: (index) {
               setState(() => _currentIndex = index);
               if (index == 1) {
@@ -121,26 +124,17 @@ class _MainShellPageState extends State<MainShellPage> {
               }
             },
           ),
-          floatingActionButton: _currentIndex == 0 || _currentIndex == 2
-              ? FloatingActionButton(
-                  tooltip: 'Adicionar gasto',
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: AppColors.primary,
-                  onPressed: _openAddExpense,
-                  child: const Icon(Icons.add_rounded),
-                )
-              : null,
         );
       },
     );
   }
 
-  void _openAddExpense() {
+  Future<void> _openAddExpense() async {
     final expenseProvider = context.read<ExpenseProvider>();
     final historyProvider = context.read<HistoryProvider>();
     final dashboardProvider = context.read<DashboardProvider>();
 
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute<bool>(
         builder: (_) => AddExpensePage(
           categories: context.read<InitialSetupProvider>().categories,
@@ -163,9 +157,35 @@ class _MainShellPageState extends State<MainShellPage> {
                   await _evaluateBudgetAlert();
                 }
               },
+          onSaveRecurring:
+              ({
+                required ExpenseType type,
+                required amount,
+                required categoryId,
+                description,
+                required startDate,
+                totalOccurrences,
+              }) async {
+                await expenseProvider.addRecurringExpense(
+                  type: type,
+                  amount: amount,
+                  categoryId: categoryId,
+                  description: description,
+                  startDate: startDate,
+                  totalOccurrences: totalOccurrences,
+                );
+                if (mounted) {
+                  await historyProvider.loadHistory();
+                  await dashboardProvider.loadDashboard();
+                  await _evaluateBudgetAlert();
+                }
+              },
         ),
       ),
     );
+    if (mounted) {
+      await context.read<RecurringExpenseProvider>().reload();
+    }
   }
 
   Future<void> _evaluateBudgetAlert() async {

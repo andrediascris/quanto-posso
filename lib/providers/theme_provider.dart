@@ -10,7 +10,7 @@ class ThemeProvider extends ChangeNotifier {
   final PreferencesRepository _repository;
 
   ThemeStatus _status = ThemeStatus.initial;
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.light;
   String? _errorMessage;
 
   ThemeStatus get status => _status;
@@ -24,10 +24,10 @@ class ThemeProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _themeMode = await _repository.getThemeMode();
+      _themeMode = _supportedMode(await _repository.getThemeMode());
       _status = ThemeStatus.ready;
     } on Object {
-      _themeMode = ThemeMode.system;
+      _themeMode = ThemeMode.light;
       _errorMessage = 'Não foi possível carregar a preferência de tema.';
       _status = ThemeStatus.error;
     }
@@ -36,22 +36,27 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
-    if (mode == _themeMode) {
+    final supportedMode = _supportedMode(mode);
+    if (supportedMode == _themeMode) {
       return;
     }
 
     final previousMode = _themeMode;
-    _themeMode = mode;
+    _themeMode = supportedMode;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      await _repository.saveThemeMode(mode);
+      await _repository.saveThemeMode(supportedMode);
     } on Object {
       _themeMode = previousMode;
       _errorMessage = 'Não foi possível salvar a preferência de tema.';
       notifyListeners();
       rethrow;
     }
+  }
+
+  ThemeMode _supportedMode(ThemeMode mode) {
+    return mode == ThemeMode.dark ? ThemeMode.dark : ThemeMode.light;
   }
 }

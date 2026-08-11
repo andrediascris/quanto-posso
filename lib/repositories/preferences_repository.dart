@@ -20,14 +20,14 @@ class PreferencesRepository {
     return switch (preferences.getString(_themeModeKey)) {
       'light' => ThemeMode.light,
       'dark' => ThemeMode.dark,
-      'system' || _ => ThemeMode.system,
+      'system' || _ => ThemeMode.light,
     };
   }
 
   Future<void> saveThemeMode(ThemeMode mode) async {
     final preferences = await SharedPreferences.getInstance();
     final value = switch (mode) {
-      ThemeMode.system => 'system',
+      ThemeMode.system => 'light',
       ThemeMode.light => 'light',
       ThemeMode.dark => 'dark',
     };
@@ -178,7 +178,9 @@ class PreferencesRepository {
         }
         continue;
       }
-      final value = preferences[key];
+      final value = key == _themeModeKey && preferences[key] == 'system'
+          ? 'light'
+          : preferences[key];
       final bool saved;
       if (value is String) {
         saved = await storage.setString(key, value);
