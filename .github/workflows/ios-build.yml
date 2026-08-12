@@ -30,3 +30,20 @@ jobs:
 
       - name: Build iOS release without code signing
         run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          test -d build/ios/iphoneos/Runner.app
+          mkdir -p build/ios/unsigned/Payload
+          ditto build/ios/iphoneos/Runner.app build/ios/unsigned/Payload/Runner.app
+          cd build/ios/unsigned
+          zip -qry QuantoPosso.ipa Payload
+          test -f QuantoPosso.ipa
+          ls -lh .
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: quanto-posso-ios-unsigned
+          path: build/ios/unsigned/QuantoPosso.ipa
+          if-no-files-found: error
