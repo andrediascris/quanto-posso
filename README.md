@@ -156,15 +156,4 @@ As credenciais de assinatura são locais e não devem ser adicionadas ao reposit
 
 Versão atual: **1.0.0**
 
-O projeto está em desenvolvimento ativo. A experiência principal funciona localmente em Android e a validação de build iOS sem assinatura pode ser executada pelo workflow do GitHub Actions.
 
-## Contribuição
-
-Contribuições são bem-vindas. Para colaborar:
-
-1. Crie uma branch a partir de `main`.
-2. Faça alterações pequenas e bem delimitadas.
-3. Execute a formatação, a análise estática e os testes.
-4. Abra um Pull Request descrevendo o problema e a solução.
-
-Ao contribuir, preserve a abordagem offline-first, as migrações existentes e o fluxo `UI → Provider → Repository → persistência`.
